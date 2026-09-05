@@ -7,13 +7,62 @@ export interface Company {
   phone?: string;
 }
 
+export interface ServiceQualityConfig {
+  id: string;
+  name: string; // e.g. "Premium LCD", "OLED", "Premium OLED", "Nacional" or "Primeira Linha", "Original", etc.
+  minPrice: number;
+  suggestedPrice: number;
+  maxPrice: number;
+  warranty: string; // e.g. "90 dias", "6 meses", "1 ano"
+  estimatedTime: string; // e.g. "45 min", "1 hora"
+  internalNotes?: string;
+  active: boolean;
+}
+
+export interface DeviceServiceConfig {
+  id: string;
+  serviceId: string;
+  serviceName: string; // e.g. "Troca de Tela", "Troca de Bateria", "Conector de Carga", etc.
+  category?: string;
+  iconName?: string;
+  hasQuality: boolean; // TRUE strictly for Troca de Tela and Troca de Bateria; FALSE for all others
+  active: boolean;
+  // If hasQuality is true:
+  qualities?: ServiceQualityConfig[];
+  // If hasQuality is false (direct pricing on the service itself):
+  minPrice?: number;
+  suggestedPrice?: number;
+  maxPrice?: number;
+  warranty?: string;
+  estimatedTime?: string;
+  internalNotes?: string;
+}
+
+export interface FullDeviceModel {
+  id: string;
+  companyId?: string;
+  brand: BrandName;
+  name: string; // Modelo: iPhone 13, Galaxy A55 5G
+  family: string; // Linha/família: Linha iPhone 13, Galaxy A, Moto G
+  year?: number | string; // Ano (opcional)
+  active: boolean; // Status ativo/inativo
+  category?: 'Premium' | 'Intermediário' | 'Entrada';
+  image?: string;
+  popular?: boolean;
+  services: DeviceServiceConfig[];
+}
+
 export interface PhoneModel {
   id: string;
   brand: BrandName;
   name: string;
   category: 'Premium' | 'Intermediário' | 'Entrada';
+  family?: string;
+  year?: number | string;
+  active?: boolean;
   image?: string;
   popular?: boolean;
+  services?: DeviceServiceConfig[];
 }
 
 export type QualityTier = string;
@@ -62,12 +111,29 @@ export interface TechnicianConfig {
   active: boolean;
 }
 
+export interface PriceRuleConfig {
+  id: string;
+  companyId: string;
+  modelId: string; // Specific PhoneModel ID or 'all'
+  modelName?: string;
+  serviceId: string; // ServiceItem ID
+  serviceName?: string;
+  qualityId: string; // PartQualityConfig ID or QualityTier
+  qualityLabel?: string;
+  minPrice: number; // Preço mínimo
+  suggestedPrice: number; // Preço sugerido
+  maxPrice: number; // Preço máximo
+  active?: boolean;
+  notes?: string;
+}
+
 export interface CompanyQuoteSettings {
   companyId: string;
   warranties: WarrantyConfig[];
   qualities: PartQualityConfig[];
   serviceTypes: ServiceTypeConfig[];
   technicians: TechnicianConfig[];
+  priceRules?: PriceRuleConfig[];
 }
 
 export interface ServiceItem {
@@ -98,9 +164,12 @@ export interface Quote {
   serviceTypeName?: string;
   serviceTypeId?: string;
   technicianId?: string;
-  cashPrice: number;
+  cashPrice: number; // Preço final efetivamente oferecido ao cliente
   installmentsPrice: number;
   installmentsCount: number;
+  minAllowedPrice?: number;
+  maxAllowedPrice?: number;
+  suggestedPrice?: number;
   status: 'Pendente' | 'Enviado' | 'Aprovado' | 'Recusado';
   notes?: string;
   technicianName: string;

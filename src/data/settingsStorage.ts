@@ -6,6 +6,9 @@ import {
   ServiceTypeConfig,
   TechnicianConfig,
   StoreLocation,
+  PriceRuleConfig,
+  PhoneModel,
+  ServiceItem,
 } from '../types';
 
 export const INITIAL_COMPANIES: Company[] = [
@@ -20,6 +23,158 @@ export const INITIAL_COMPANIES: Company[] = [
     name: 'iCell Prime Especializada',
     cnpj: '98.765.432/0001-11',
     phone: '(11) 4004-9988',
+  },
+];
+
+// Initial default price rules for TechFix Matriz (comp-1)
+export const DEFAULT_PRICE_RULES_COMP1: PriceRuleConfig[] = [
+  {
+    id: 'pr-ip13-tela-compativel',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-compativel',
+    qualityLabel: 'Compatível / Primeira Linha',
+    minPrice: 350,
+    suggestedPrice: 420,
+    maxPrice: 500,
+    notes: 'Exemplo padrão homologado',
+  },
+  {
+    id: 'pr-ip13-tela-premium',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-premium',
+    qualityLabel: 'Premium / Linha Ouro',
+    minPrice: 480,
+    suggestedPrice: 580,
+    maxPrice: 700,
+    notes: 'Mais recomendada para iPhone 13',
+  },
+  {
+    id: 'pr-ip13-tela-oled',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-oled',
+    qualityLabel: 'OLED / Soft OLED',
+    minPrice: 550,
+    suggestedPrice: 650,
+    maxPrice: 780,
+  },
+  {
+    id: 'pr-ip13-tela-original-nac',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-original-nac',
+    qualityLabel: 'Original Nacional / Homologada',
+    minPrice: 720,
+    suggestedPrice: 850,
+    maxPrice: 1050,
+  },
+  {
+    id: 'pr-ip13-tela-original',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-original',
+    qualityLabel: 'Original / Retirada',
+    minPrice: 780,
+    suggestedPrice: 920,
+    maxPrice: 1150,
+  },
+  {
+    id: 'pr-ip13-bateria-premium',
+    companyId: 'comp-1',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-bateria',
+    serviceName: 'Troca de Bateria Premium',
+    qualityId: 'qual-premium',
+    qualityLabel: 'Premium / Linha Ouro',
+    minPrice: 230,
+    suggestedPrice: 280,
+    maxPrice: 350,
+  },
+  {
+    id: 'pr-ip11-bateria-premium',
+    companyId: 'comp-1',
+    modelId: 'ip11',
+    modelName: 'iPhone 11',
+    serviceId: 'srv-bateria',
+    serviceName: 'Troca de Bateria Premium',
+    qualityId: 'qual-premium',
+    qualityLabel: 'Premium / Linha Ouro',
+    minPrice: 180,
+    suggestedPrice: 220,
+    maxPrice: 280,
+  },
+  {
+    id: 'pr-a54-tela-premium',
+    companyId: 'comp-1',
+    modelId: 'gal-a54',
+    modelName: 'Galaxy A54 5G',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-premium',
+    qualityLabel: 'Premium / Linha Ouro',
+    minPrice: 280,
+    suggestedPrice: 340,
+    maxPrice: 420,
+  },
+  {
+    id: 'pr-motg54-conector',
+    companyId: 'comp-1',
+    modelId: 'mot-g54',
+    modelName: 'Moto G54 5G',
+    serviceId: 'srv-conector',
+    serviceName: 'Conector de Carga / Subplaca',
+    qualityId: 'qual-compativel',
+    qualityLabel: 'Compatível / Primeira Linha',
+    minPrice: 110,
+    suggestedPrice: 140,
+    maxPrice: 190,
+  },
+];
+
+export const DEFAULT_PRICE_RULES_COMP2: PriceRuleConfig[] = [
+  {
+    id: 'pr-icell-ip13-tela-gold',
+    companyId: 'comp-2',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-icell-gold',
+    qualityLabel: 'Linha Gold iCell Certificada',
+    minPrice: 490,
+    suggestedPrice: 590,
+    maxPrice: 720,
+  },
+  {
+    id: 'pr-icell-ip13-tela-retirada',
+    companyId: 'comp-2',
+    modelId: 'ip13',
+    modelName: 'iPhone 13',
+    serviceId: 'srv-tela',
+    serviceName: 'Troca de Tela Frontal',
+    qualityId: 'qual-icell-retirada',
+    qualityLabel: 'Original Apple Retirada 100%',
+    minPrice: 790,
+    suggestedPrice: 950,
+    maxPrice: 1180,
   },
 ];
 
@@ -197,6 +352,7 @@ export const DEFAULT_SETTINGS_COMP1: CompanyQuoteSettings = {
       active: false,
     },
   ],
+  priceRules: DEFAULT_PRICE_RULES_COMP1,
 };
 
 // Initial default settings for iCell Prime (comp-2)
@@ -294,6 +450,7 @@ export const DEFAULT_SETTINGS_COMP2: CompanyQuoteSettings = {
       active: true,
     },
   ],
+  priceRules: DEFAULT_PRICE_RULES_COMP2,
 };
 
 const STORAGE_KEY_PREFIX = 'orcatech_company_settings_';
@@ -303,7 +460,15 @@ export function getCompanySettings(companyId: string): CompanyQuoteSettings {
   try {
     const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${companyId}`);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed: CompanyQuoteSettings = JSON.parse(raw);
+      // Ensure backward-compatibility for priceRules
+      if (!parsed.priceRules || parsed.priceRules.length === 0) {
+        parsed.priceRules =
+          companyId === 'comp-2'
+            ? [...DEFAULT_PRICE_RULES_COMP2]
+            : [...DEFAULT_PRICE_RULES_COMP1];
+      }
+      return parsed;
     }
   } catch (e) {
     console.warn('Failed to load settings from localStorage', e);
@@ -326,4 +491,98 @@ export function saveCompanySettings(settings: CompanyQuoteSettings): void {
   } catch (e) {
     console.warn('Failed to save settings to localStorage', e);
   }
+}
+
+export interface PriceBoundsResult {
+  minPrice: number;
+  suggestedPrice: number;
+  maxPrice: number;
+  effectiveMin: number;
+  effectiveSuggested: number;
+  effectiveMax: number;
+  isCustomRule: boolean;
+  ruleNotes?: string;
+}
+
+/**
+ * Calculates Min, Suggested, and Max prices for a combination of:
+ * Model + Service + Quality (+ optional ServiceType extra fee)
+ */
+export function calculatePriceBounds(
+  settings: CompanyQuoteSettings | undefined,
+  model: PhoneModel | null,
+  service: ServiceItem | null,
+  quality: PartQualityConfig | null,
+  serviceType?: ServiceTypeConfig | null
+): PriceBoundsResult {
+  if (!model || !service) {
+    return {
+      minPrice: 0,
+      suggestedPrice: 0,
+      maxPrice: 0,
+      effectiveMin: 0,
+      effectiveSuggested: 0,
+      effectiveMax: 0,
+      isCustomRule: false,
+    };
+  }
+
+  const extraFee = serviceType?.extraFee || 0;
+
+  // 1. Check if an explicit price rule exists in company settings
+  const rules = settings?.priceRules || DEFAULT_PRICE_RULES_COMP1;
+  const matchedRule = rules.find((r) => {
+    const matchModel = r.modelId === 'all' || r.modelId === model.id;
+    const matchService = r.serviceId === service.id;
+    const matchQuality =
+      !quality ||
+      r.qualityId === quality.id ||
+      r.qualityId === quality.name ||
+      (quality.label && r.qualityLabel && quality.label.toLowerCase().includes(r.qualityLabel.toLowerCase()));
+
+    return matchModel && matchService && matchQuality;
+  });
+
+  if (matchedRule) {
+    return {
+      minPrice: matchedRule.minPrice,
+      suggestedPrice: matchedRule.suggestedPrice,
+      maxPrice: matchedRule.maxPrice,
+      effectiveMin: matchedRule.minPrice + extraFee,
+      effectiveSuggested: matchedRule.suggestedPrice + extraFee,
+      effectiveMax: matchedRule.maxPrice + extraFee,
+      isCustomRule: true,
+      ruleNotes: matchedRule.notes,
+    };
+  }
+
+  // 2. If no explicit rule, derive sensible commercial bounds (Min ~83%, Max ~120% rounded to tens)
+  let modelFactor = 1.0;
+  if (model.category === 'Premium') {
+    modelFactor = model.brand === 'Apple' ? 1.65 : 1.45;
+  } else if (model.category === 'Intermediário') {
+    modelFactor = 1.0;
+  } else {
+    modelFactor = 0.85;
+  }
+
+  const qualityMultiplier = quality?.priceMultiplier || 1.0;
+  const baseCost = service.basePrice * modelFactor * qualityMultiplier;
+
+  // Suggested price rounded to 10
+  const suggestedPrice = Math.max(30, Math.round(baseCost / 10) * 10);
+  // Min price ~83% of suggested, minimum difference of 20
+  const minPrice = Math.max(20, Math.round((suggestedPrice * 0.83) / 10) * 10);
+  // Max price ~120% of suggested
+  const maxPrice = Math.round((suggestedPrice * 1.20) / 10) * 10;
+
+  return {
+    minPrice,
+    suggestedPrice,
+    maxPrice,
+    effectiveMin: minPrice + extraFee,
+    effectiveSuggested: suggestedPrice + extraFee,
+    effectiveMax: maxPrice + extraFee,
+    isCustomRule: false,
+  };
 }

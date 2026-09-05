@@ -37,14 +37,20 @@ export const QuotePreviewModal: React.FC<QuotePreviewModalProps> = ({
   if (!isOpen) return null;
 
   // Format WhatsApp Message Text
+  const hasQualityLine =
+    quote.qualityTier &&
+    quote.qualityTier !== 'na' &&
+    quote.qualityLabel &&
+    !quote.qualityLabel.toLowerCase().includes('sem qualidade') &&
+    !quote.qualityLabel.toLowerCase().includes('não se aplica');
+
   const messageText = `🔧 *ORÇATECH ASSISTÊNCIA TÉCNICA* 📱
 Olá, *${quote.clientName || 'Cliente'}*! Tudo bem?
 Aqui está o orçamento detalhado para o seu aparelho:
 
 📱 *Aparelho:* ${quote.deviceName}
 🛠️ *Serviço:* ${quote.serviceName}
-💎 *Qualidade:* ${quote.qualityLabel}
-🛡️ *Garantia:* ${quote.warranty}
+${hasQualityLine ? `💎 *Qualidade:* ${quote.qualityLabel}\n` : ''}🛡️ *Garantia:* ${quote.warranty}
 🚚 *Modalidade:* ${quote.serviceTypeName || 'Atendimento na Loja'}
 ⏱️ *Prazo de Execução:* ${quote.deliveryTime}
 
@@ -134,7 +140,7 @@ Deseja aprovar e reservar o seu horário hoje?`;
               <div className="bg-slate-50 p-2 rounded-lg space-y-1 text-[11px] border border-slate-100 font-medium">
                 <div>📱 <strong>Aparelho:</strong> {quote.deviceName}</div>
                 <div>🛠️ <strong>Serviço:</strong> {quote.serviceName}</div>
-                <div>💎 <strong>Qualidade:</strong> {quote.qualityLabel}</div>
+                {hasQualityLine && <div>💎 <strong>Qualidade:</strong> {quote.qualityLabel}</div>}
                 <div>🛡️ <strong>Garantia:</strong> {quote.warranty}</div>
                 <div>🚚 <strong>Atendimento:</strong> {quote.serviceTypeName || 'Atendimento na Loja'}</div>
                 <div>⏱️ <strong>Prazo:</strong> {quote.deliveryTime}</div>

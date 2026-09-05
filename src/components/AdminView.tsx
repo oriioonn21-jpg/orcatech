@@ -42,6 +42,7 @@ import {
   COMPANIES,
 } from '../data/mockData';
 import { QuoteSettingsManager } from './QuoteSettingsManager';
+import { DeviceManagementView } from './DeviceManagementView';
 
 interface AdminViewProps {
   currentUser?: StaffMember | null;
@@ -52,9 +53,10 @@ interface AdminViewProps {
   onUpdateCompanySettings?: (newSettings: CompanyQuoteSettings) => void;
   onSwitchCompany?: (companyId: string) => void;
   companies?: Company[];
+  onNavigateNewQuote?: (brand?: BrandName) => void;
 }
 
-type AdminSection = 'orcamento' | 'catalogo';
+type AdminSection = 'aparelhos' | 'orcamento' | 'catalogo';
 type AdminTab = 'marcas' | 'modelos' | 'servicos' | 'pecas' | 'precos' | 'funcionarios' | 'lojas';
 
 export const AdminView: React.FC<AdminViewProps> = ({
@@ -66,9 +68,10 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onUpdateCompanySettings,
   onSwitchCompany,
   companies = COMPANIES,
+  onNavigateNewQuote,
 }) => {
-  // Main section: 'orcamento' (Configurações de Orçamento) or 'catalogo'
-  const [activeSection, setActiveSection] = useState<AdminSection>('orcamento');
+  // Main section: 'aparelhos' (Cadastro Completo do Aparelho), 'orcamento', or 'catalogo'
+  const [activeSection, setActiveSection] = useState<AdminSection>('aparelhos');
   const [currentTab, setCurrentTab] = useState<AdminTab>('marcas');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -200,19 +203,41 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* Main Section Navigation: Configurações de Orçamento vs Catálogo Geral */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      {/* Main Section Navigation: Cadastro Completo de Aparelhos vs Configurações de Orçamento vs Filiais */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar">
+        <button
+          id="tab-section-aparelhos"
+          onClick={() => setActiveSection('aparelhos')}
+          className={`px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-2 shrink-0 ${
+            activeSection === 'aparelhos'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Smartphone className="w-4 h-4" />
+          <span>Cadastro de Aparelhos & Preços</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+              activeSection === 'aparelhos'
+                ? 'bg-blue-700 text-blue-100'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+            }`}
+          >
+            Unificado
+          </span>
+        </button>
+
         <button
           id="tab-section-orcamento"
           onClick={() => setActiveSection('orcamento')}
-          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-2 shrink-0 ${
             activeSection === 'orcamento'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
           <Sliders className="w-4 h-4" />
-          <span>Configurações de Orçamento</span>
+          <span>Regras de Orçamento</span>
           <span
             className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               activeSection === 'orcamento'
@@ -220,25 +245,34 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 : 'bg-blue-50 text-blue-700'
             }`}
           >
-            Personalização
+            Equipe & Prazos
           </span>
         </button>
 
         <button
           id="tab-section-catalogo"
           onClick={() => setActiveSection('catalogo')}
-          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${
+          className={`px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer flex items-center gap-2 shrink-0 ${
             activeSection === 'catalogo'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
           }`}
         >
           <Store className="w-4 h-4" />
-          <span>Catálogo & Filiais</span>
+          <span>Filiais & Usuários</span>
         </button>
       </div>
 
-      {/* SECTION 1: CONFIGURAÇÕES DE ORÇAMENTO (Garantias, Qualidades, Atendimentos, Técnicos) */}
+      {/* SECTION 1: CADASTRO COMPLETO DO APARELHO (Tela única para gerenciamento de modelos, serviços e preços) */}
+      {activeSection === 'aparelhos' && companySettings && (
+        <DeviceManagementView
+          companyId={currentCompany.id}
+          companySettings={companySettings}
+          onNavigateNewQuote={onNavigateNewQuote}
+        />
+      )}
+
+      {/* SECTION 2: CONFIGURAÇÕES DE ORÇAMENTO (Garantias, Qualidades, Atendimentos, Técnicos) */}
       {activeSection === 'orcamento' && companySettings && onUpdateCompanySettings && (
         <QuoteSettingsManager
           settings={companySettings}

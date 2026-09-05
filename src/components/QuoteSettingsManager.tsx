@@ -25,10 +25,12 @@ import {
   PartQualityConfig,
   ServiceTypeConfig,
   TechnicianConfig,
+  PriceRuleConfig,
   StaffMember,
   StoreLocation,
   Company,
 } from '../types';
+import { PHONE_MODELS, SERVICES } from '../data/mockData';
 
 interface QuoteSettingsManagerProps {
   settings: CompanyQuoteSettings;
@@ -38,7 +40,7 @@ interface QuoteSettingsManagerProps {
   onUpdateSettings: (newSettings: CompanyQuoteSettings) => void;
 }
 
-type SettingTab = 'garantias' | 'qualidades' | 'atendimentos' | 'tecnicos';
+type SettingTab = 'garantias' | 'qualidades' | 'atendimentos' | 'tecnicos' | 'precos';
 
 export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
   settings,
@@ -79,6 +81,16 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
   const [tecStoreId, setTecStoreId] = useState(stores[0]?.id || '');
   const [tecActive, setTecActive] = useState(true);
 
+  // Price Rule form (Min, Suggested, Max)
+  const [priceModelId, setPriceModelId] = useState(PHONE_MODELS[0]?.id || '');
+  const [priceServiceId, setPriceServiceId] = useState(SERVICES[0]?.id || '');
+  const [priceQualityId, setPriceQualityId] = useState(settings.qualities[0]?.id || '');
+  const [priceMin, setPriceMin] = useState<number>(350);
+  const [priceSuggested, setPriceSuggested] = useState<number>(420);
+  const [priceMax, setPriceMax] = useState<number>(500);
+  const [priceNotes, setPriceNotes] = useState('');
+  const [priceSearchQuery, setPriceSearchQuery] = useState('');
+
   // Delete confirmation modal state
   const [deleteConfirm, setDeleteConfirm] = useState<{
     tab: SettingTab;
@@ -116,6 +128,14 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
       setTecPhone('');
       setTecStoreId(stores[0]?.id || '');
       setTecActive(true);
+    } else if (activeTab === 'precos') {
+      setPriceModelId(PHONE_MODELS[0]?.id || '');
+      setPriceServiceId(SERVICES[0]?.id || '');
+      setPriceQualityId(settings.qualities[0]?.id || '');
+      setPriceMin(350);
+      setPriceSuggested(420);
+      setPriceMax(500);
+      setPriceNotes('');
     }
     setIsModalOpen(true);
   };
@@ -150,6 +170,15 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
       setTecPhone(t.phone || '');
       setTecStoreId(t.storeId);
       setTecActive(t.active);
+    } else if (activeTab === 'precos') {
+      const p = item as PriceRuleConfig;
+      setPriceModelId(p.modelId);
+      setPriceServiceId(p.serviceId);
+      setPriceQualityId(p.qualityId);
+      setPriceMin(p.minPrice);
+      setPriceSuggested(p.suggestedPrice);
+      setPriceMax(p.maxPrice);
+      setPriceNotes(p.notes || '');
     }
     setIsModalOpen(true);
   };
@@ -178,6 +207,11 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
         t.id === id ? { ...t, active: !t.active } : t
       );
       onUpdateSettings({ ...settings, technicians: updated });
+    } else if (tab === 'precos') {
+      const updated = (settings.priceRules || []).map((p) =>
+        p.id === id ? { ...p, active: !p.active } : p
+      );
+      onUpdateSettings({ ...settings, priceRules: updated });
     }
   };
 
@@ -305,6 +339,73 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
         };
         onUpdateSettings({ ...settings, technicians: [...settings.technicians, newTec] });
       }
+    } else if (activeTab === 'precos') {
+      const minVal = Math.round(Number(priceMin));
+      const sugVal = Math.round(Number(priceSuggested));
+      const maxVal = Math.round(Number(priceMax));
+
+      if (minVal <= 0) {
+        alert('O Preço Mínimo deve ser maior que zero.');
+        return;
+      }
+      if (sugVal < minVal) {
+        alert('O Preço Sugerido não pode ser menor que o Preço Mínimo.');
+        return;
+      }
+      if (maxVal < sugVal) {
+        alert('O Preço Máximo não pode ser menor que o Preço Sugerido.');
+        return;
+      }
+
+      const model = PHONE_MODELS.find((m) => m.id === priceModelId);
+      const service = SERVICES.find((s) => s.id === priceServiceId);
+      const quality = settings.qualities.find((q) => q.id === priceQualityId);
+
+      if (!model || !service || !quality) {
+        alert('Selecione um modelo, serviço e qualidade válidos.');
+        return;
+      }
+
+      if (editingItem) {
+        const updated = (settings.priceRules || []).map((p) =>
+          p.id === editingItem.id
+            ? {
+                ...p,
+                modelId: model.id,
+                modelName: model.name,
+                serviceId: service.id,
+                serviceName: service.name,
+                qualityId: quality.id,
+                qualityLabel: quality.label,
+                minPrice: minVal,
+                suggestedPrice: sugVal,
+                maxPrice: maxVal,
+                notes: priceNotes.trim(),
+              }
+            : p
+        );
+        onUpdateSettings({ ...settings, priceRules: updated });
+      } else {
+        const newRule: PriceRuleConfig = {
+          id: `pr-${Date.now()}`,
+          companyId: company.id,
+          modelId: model.id,
+          modelName: model.name,
+          serviceId: service.id,
+          serviceName: service.name,
+          qualityId: quality.id,
+          qualityLabel: quality.label,
+          minPrice: minVal,
+          suggestedPrice: sugVal,
+          maxPrice: maxVal,
+          active: true,
+          notes: priceNotes.trim(),
+        };
+        onUpdateSettings({
+          ...settings,
+          priceRules: [newRule, ...(settings.priceRules || [])],
+        });
+      }
     }
 
     setIsModalOpen(false);
@@ -328,10 +429,24 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
     } else if (tab === 'tecnicos') {
       const updated = settings.technicians.filter((t) => t.id !== id);
       onUpdateSettings({ ...settings, technicians: updated });
+    } else if (tab === 'precos') {
+      const updated = (settings.priceRules || []).filter((p) => p.id !== id);
+      onUpdateSettings({ ...settings, priceRules: updated });
     }
 
     setDeleteConfirm(null);
   };
+
+  // Filtered price rules for search
+  const filteredPriceRules = (settings.priceRules || []).filter((rule) => {
+    if (!priceSearchQuery.trim()) return true;
+    const q = priceSearchQuery.toLowerCase();
+    return (
+      rule.modelName.toLowerCase().includes(q) ||
+      rule.serviceName.toLowerCase().includes(q) ||
+      rule.qualityLabel.toLowerCase().includes(q)
+    );
+  });
 
   // Tab definitions
   const tabs = [
@@ -366,6 +481,14 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
       count: settings.technicians.length,
       activeCount: settings.technicians.filter((t) => t.active).length,
       desc: 'Profissionais cadastrados para execução dos reparos',
+    },
+    {
+      id: 'precos' as SettingTab,
+      label: 'Tabela de Preços (Mín/Sugerido/Máx)',
+      icon: DollarSign,
+      count: (settings.priceRules || []).length,
+      activeCount: (settings.priceRules || []).filter((r) => r.active).length,
+      desc: 'Faixas comerciais de preço mínimo, sugerido e máximo por modelo, serviço e qualidade',
     },
   ];
 
@@ -910,6 +1033,158 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
         </div>
       )}
 
+      {/* TAB CONTENT: 5. TABELA DE PREÇOS (MÍN / SUGERIDO / MÁX) */}
+      {activeTab === 'precos' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Faixas de Preço por Modelo, Serviço e Qualidade
+                </h3>
+                <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                  Mín / Sugerido / Máx
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Defina os limites comerciais. O Novo Orçamento preenche o Preço Sugerido e valida a edição entre o Mínimo e o Máximo.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Buscar modelo ou serviço..."
+                value={priceSearchQuery}
+                onChange={(e) => setPriceSearchQuery(e.target.value)}
+                className="text-xs px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg w-48 focus:outline-none focus:border-blue-600"
+              />
+              <span className="text-xs font-semibold text-slate-400 shrink-0">
+                {(settings.priceRules || []).length} regras
+              </span>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {filteredPriceRules.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                Nenhuma regra de preço configurada. Clique em "+ Novo Item" acima para cadastrar a primeira faixa comercial.
+              </div>
+            ) : (
+              filteredPriceRules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors"
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs ${
+                        rule.active
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-slate-200 text-slate-500'
+                      }`}
+                    >
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-900">{rule.modelName}</span>
+                        <span className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                          {rule.serviceName}
+                        </span>
+                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                          {rule.qualityLabel}
+                        </span>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            rule.active
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}
+                        >
+                          {rule.active ? 'Ativa' : 'Inativa'}
+                        </span>
+                      </div>
+
+                      {/* 3 Values Display */}
+                      <div className="flex items-center gap-4 mt-2 text-xs flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 font-medium">Mínimo:</span>
+                          <strong className="text-slate-700">R$ {rule.minPrice}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-blue-50/90 px-2 py-0.5 rounded text-blue-900 font-bold border border-blue-200/60">
+                          <span className="text-blue-600 font-semibold">Sugerido:</span>
+                          <strong>R$ {rule.suggestedPrice}</strong>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400 font-medium">Máximo:</span>
+                          <strong className="text-slate-700">R$ {rule.maxPrice}</strong>
+                        </div>
+                        <span className="text-slate-400 text-[11px]">
+                          (Margem permitida: R$ {rule.minPrice} a R$ {rule.maxPrice})
+                        </span>
+                      </div>
+
+                      {rule.notes && (
+                        <p className="text-[11px] text-slate-400 mt-1 italic">
+                          Obs: {rule.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                    <button
+                      disabled={!isAdmin}
+                      onClick={() => handleToggleActive('precos', rule.id)}
+                      title={rule.active ? 'Desativar regra' : 'Ativar regra'}
+                      className={`p-1.5 rounded-lg border transition-colors ${
+                        !isAdmin
+                          ? 'opacity-40 cursor-not-allowed border-slate-200 text-slate-400'
+                          : rule.active
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 cursor-pointer'
+                          : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200 cursor-pointer'
+                      }`}
+                    >
+                      {rule.active ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                    </button>
+
+                    <button
+                      disabled={!isAdmin}
+                      onClick={() => handleOpenEdit(rule)}
+                      title="Editar Valores"
+                      className={`p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-colors ${
+                        !isAdmin ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      disabled={!isAdmin}
+                      onClick={() =>
+                        setDeleteConfirm({
+                          tab: 'precos',
+                          id: rule.id,
+                          title: `Regra de Preço "${rule.modelName} - ${rule.serviceName}"`,
+                        })
+                      }
+                      title="Excluir"
+                      className={`p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-rose-600 hover:bg-rose-50 transition-colors ${
+                        !isAdmin ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -923,6 +1198,8 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
                   ? 'Qualidade de Peça'
                   : activeTab === 'atendimentos'
                   ? 'Tipo de Atendimento'
+                  : activeTab === 'precos'
+                  ? 'Faixa de Preço (Mín/Sugerido/Máx)'
                   : 'Técnico'}
               </h4>
               <button
@@ -1191,6 +1468,135 @@ export const QuoteSettingsManager: React.FC<QuoteSettingsManagerProps> = ({
                     <label htmlFor="checkbox-tec-active" className="text-xs text-slate-700 font-medium cursor-pointer">
                       Técnico Ativo (disponível para atribuição em novos orçamentos)
                     </label>
+                  </div>
+                </>
+              )}
+
+              {/* FORM FIELDS: PREÇOS (MÍN / SUGERIDO / MÁX) */}
+              {activeTab === 'precos' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Modelo do Aparelho *
+                    </label>
+                    <select
+                      value={priceModelId}
+                      onChange={(e) => setPriceModelId(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      {PHONE_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.brand} {m.name} ({m.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Serviço *
+                      </label>
+                      <select
+                        value={priceServiceId}
+                        onChange={(e) => setPriceServiceId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        {SERVICES.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Qualidade da Peça *
+                      </label>
+                      <select
+                        value={priceQualityId}
+                        onChange={(e) => setPriceQualityId(e.target.value)}
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      >
+                        {settings.qualities.map((q) => (
+                          <option key={q.id} value={q.id}>
+                            {q.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 3 Values: Min, Suggested, Max */}
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-3">
+                    <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                      Definição da Faixa Comercial
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Mínimo (R$) *
+                        </label>
+                        <input
+                          type="number"
+                          min="10"
+                          step="1"
+                          value={priceMin}
+                          onChange={(e) => setPriceMin(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-blue-700 mb-1">
+                          Sugerido (R$) *
+                        </label>
+                        <input
+                          type="number"
+                          min="10"
+                          step="1"
+                          value={priceSuggested}
+                          onChange={(e) => setPriceSuggested(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 bg-white border border-blue-400 rounded-lg text-xs font-bold text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                          Máximo (R$) *
+                        </label>
+                        <input
+                          type="number"
+                          min="10"
+                          step="1"
+                          value={priceMax}
+                          onChange={(e) => setPriceMax(Number(e.target.value))}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      <strong>Exemplo:</strong> Mínimo: R$ {priceMin || 350} | Sugerido: R$ {priceSuggested || 420} | Máximo: R$ {priceMax || 500}. O vendedor iniciará no Sugerido e poderá negociar livremente entre o Mínimo e o Máximo.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Observações Internas (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={priceNotes}
+                      onChange={(e) => setPriceNotes(e.target.value)}
+                      placeholder="Ex: Tabela promocional ou margem especial"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 </>
               )}

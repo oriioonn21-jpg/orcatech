@@ -26,6 +26,15 @@ import {
   UserCheck,
   Tag,
   Building2,
+  AlertCircle,
+  DollarSign,
+  Edit3,
+  Mic,
+  Cpu,
+  Radio,
+  Droplets,
+  Volume1,
+  Layers,
 } from 'lucide-react';
 import {
   BrandName,
@@ -39,8 +48,13 @@ import {
   WarrantyConfig,
   ServiceTypeConfig,
   TechnicianConfig,
+  FullDeviceModel,
+  DeviceServiceConfig,
+  ServiceQualityConfig,
 } from '../types';
 import { BRANDS, PHONE_MODELS, SERVICES } from '../data/mockData';
+import { calculatePriceBounds } from '../data/settingsStorage';
+import { getCompanyDevices } from '../data/deviceStorage';
 
 interface NewQuoteViewProps {
   currentUser: StaffMember | null;
@@ -51,8 +65,34 @@ interface NewQuoteViewProps {
   onCancel: () => void;
 }
 
+// Unified model & service types for quote generator
+export interface UnifiedModelSelection {
+  id: string;
+  brand: BrandName;
+  name: string;
+  series?: string;
+  year?: number;
+  category: string;
+  popular?: boolean;
+}
+
+export interface UnifiedServiceSelection {
+  id: string;
+  name: string;
+  category?: string;
+  iconName?: string;
+  hasQuality?: boolean;
+  basePrice: number;
+  minPrice?: number;
+  suggestedPrice?: number;
+  maxPrice?: number;
+  warranty?: string;
+  estimatedTime?: string;
+  qualities?: ServiceQualityConfig[];
+}
+
 // Helper to render service icons dynamically
-const renderServiceIcon = (iconName: string, className = 'w-5 h-5') => {
+const renderServiceIcon = (iconName?: string, className = 'w-5 h-5') => {
   switch (iconName) {
     case 'Smartphone':
       return <Smartphone className={className} />;
@@ -64,8 +104,20 @@ const renderServiceIcon = (iconName: string, className = 'w-5 h-5') => {
       return <Camera className={className} />;
     case 'Volume2':
       return <Volume2 className={className} />;
+    case 'Volume1':
+      return <Volume1 className={className} />;
     case 'Maximize2':
       return <Maximize2 className={className} />;
+    case 'Mic':
+      return <Mic className={className} />;
+    case 'Cpu':
+      return <Cpu className={className} />;
+    case 'Radio':
+      return <Radio className={className} />;
+    case 'Droplets':
+      return <Droplets className={className} />;
+    case 'Layers':
+      return <Layers className={className} />;
     case 'Wrench':
     default:
       return <Wrench className={className} />;
@@ -84,17 +136,127 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<BrandName | 'Todas'>(initialBrand || 'Todas');
 
+  // Load registered company device catalog
+  const companyDevices = useMemo(() => {
+    return getCompanyDevices(companySettings.companyId);
+  }, [companySettings.companyId]);
+
   // STEP 1: Model Selection
-  const [selectedModel, setSelectedModel] = useState<PhoneModel | null>(null);
+  const [selectedModel, setSelectedModel] = useState<UnifiedModelSelection | null>(null);
 
   // STEP 2: Service Selection
-  const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
+  const [selectedService, setSelectedService] = useState<UnifiedServiceSelection | null>(null);
+
+  // Available services for the currently selected model
+  const availableServices = useMemo<UnifiedServiceSelection[]>(() => {
+    if (!selectedModel) {
+      // Preview mode before model is chosen: show active services
+      return SERVICES.map((s) => ({
+        id: s.id,
+        name: s.name,
+        category: s.category,
+        iconName: s.iconName,
+        hasQuality: s.id === 'srv-tela' || s.id === 'srv-bateria',
+        basePrice: s.basePrice,
+      }));
+    }
+
+    const dev = companyDevices.find(
+      (d) => d.id === selectedModel.id || d.name.toLowerCase() === selectedModel.name.toLowerCase()
+    );
+
+    if (dev && dev.services && dev.services.length > 0) {
+      return dev.services
+        .filter((s) => s.active)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          category: s.category,
+          iconName: s.iconName,
+          hasQuality: s.hasQuality,
+          basePrice: s.suggestedPrice || 100,
+          minPrice: s.minPrice,
+          suggestedPrice: s.suggestedPrice,
+          maxPrice: s.maxPrice,
+          warranty: s.warranty,
+          estimatedTime: s.estimatedTime,
+          qualities: s.qualities,
+        }));
+    }
+
+    return SERVICES.map((s) => ({
+      id: s.id,
+      name: s.name,
+      category: s.category,
+      iconName: s.iconName,
+      hasQuality: s.id === 'srv-tela' || s.id === 'srv-bateria',
+      basePrice: s.basePrice,
+    }));
+  }, [selectedModel, companyDevices]);
+
+  // Special Rule: ONLY "Troca de Tela" and "Troca de Bateria" require quality
+  const serviceRequiresQuality = useMemo(() => {
+    if (!selectedService) return false;
+    const name = selectedService.name.toLowerCase();
+    if (name.includes('tela') || name.includes('bateria')) return true;
+    return Boolean(selectedService.hasQuality);
+  }, [selectedService]);
+
+  // Dynamic step numbers based on whether Quality is required
+  const stepNumbers = useMemo(() => {
+    let count = 2;
+    const quality = serviceRequiresQuality ? ++count : null;
+    const warranty = ++count;
+    const serviceType = ++count;
+    const technician = ++count;
+    const price = ++count;
+    return {
+      model: 1,
+      service: 2,
+      quality,
+      warranty,
+      serviceType,
+      technician,
+      price,
+    };
+  }, [serviceRequiresQuality]);
 
   // Dynamic active options from company settings
-  const activeQualities = useMemo(() => {
+  const fallbackActiveQualities = useMemo(() => {
     const list = companySettings.qualities.filter((q) => q.active);
     return list.length > 0 ? list : companySettings.qualities;
   }, [companySettings.qualities]);
+
+  // Available qualities for the current service (either device-specific or company defaults)
+  const availableQualities = useMemo(() => {
+    if (!selectedService || !serviceRequiresQuality) return [];
+
+    if (selectedService.qualities && selectedService.qualities.length > 0) {
+      const active = selectedService.qualities.filter((q) => q.active);
+      if (active.length > 0) {
+        return active.map((q) => ({
+          id: q.id,
+          name: q.name,
+          label: q.name,
+          badge:
+            q.name.includes('OLED') || q.name.includes('Gold') || q.name.includes('Original')
+              ? 'Premium'
+              : 'Padrão',
+          description: `Garantia: ${q.warranty || '90 dias'} • Prazo: ${q.estimatedTime || '45 min'}`,
+          priceMultiplier: 1.0,
+          warrantyDefault: q.warranty,
+          active: q.active,
+          minPrice: q.minPrice,
+          suggestedPrice: q.suggestedPrice,
+          maxPrice: q.maxPrice,
+          warranty: q.warranty,
+          estimatedTime: q.estimatedTime,
+        }));
+      }
+    }
+
+    return fallbackActiveQualities;
+  }, [selectedService, serviceRequiresQuality, fallbackActiveQualities]);
 
   const activeWarranties = useMemo(() => {
     const list = companySettings.warranties.filter((w) => w.active);
@@ -112,8 +274,8 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
   }, [companySettings.technicians]);
 
   // STEP 3: Quality Selection
-  const [selectedQuality, setSelectedQuality] = useState<PartQualityConfig>(() => {
-    return activeQualities[0];
+  const [selectedQuality, setSelectedQuality] = useState<any>(() => {
+    return fallbackActiveQualities[0];
   });
 
   // STEP 4: Warranty Selection (allows quick select pill + custom text input)
@@ -147,25 +309,44 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
 
   // Keep state synced if companySettings change
   useEffect(() => {
-    if (!activeQualities.some((q) => q.id === selectedQuality.id) && activeQualities[0]) {
-      setSelectedQuality(activeQualities[0]);
+    if (serviceRequiresQuality && availableQualities.length > 0) {
+      if (!availableQualities.some((q) => q.id === selectedQuality?.id)) {
+        const first = availableQualities[0];
+        setSelectedQuality(first);
+        if (first.warranty && !isCustomWarrantyMode) setSelectedWarranty(first.warranty);
+        if (first.estimatedTime) setCustomDeliveryTime(first.estimatedTime);
+      }
     }
+  }, [serviceRequiresQuality, availableQualities, selectedQuality?.id, isCustomWarrantyMode]);
+
+  useEffect(() => {
+    if (selectedService && !serviceRequiresQuality) {
+      if (selectedService.warranty && !isCustomWarrantyMode) {
+        setSelectedWarranty(selectedService.warranty);
+      }
+      if (selectedService.estimatedTime) {
+        setCustomDeliveryTime(selectedService.estimatedTime);
+      }
+    }
+  }, [selectedService, serviceRequiresQuality, isCustomWarrantyMode]);
+
+  useEffect(() => {
     if (!activeServiceTypes.some((s) => s.id === selectedServiceType.id) && activeServiceTypes[0]) {
       setSelectedServiceType(activeServiceTypes[0]);
     }
     if (!activeTechnicians.some((t) => t.id === selectedTechnician.id) && activeTechnicians[0]) {
       setSelectedTechnician(activeTechnicians[0]);
     }
-  }, [activeQualities, activeServiceTypes, activeTechnicians]);
+  }, [activeServiceTypes, activeTechnicians]);
 
-  // Quick search examples (requirement 4)
+  // Quick search examples
   const quickSearchExamples = [
     { label: 'iPhone 13', query: 'iPhone 13' },
-    { label: 'A54', query: 'A54' },
+    { label: 'A55', query: 'A55' },
     { label: 'iPhone 13 tela', query: 'iPhone 13 tela' },
     { label: 'bateria iPhone 11', query: 'bateria iPhone 11' },
     { label: 'Moto G54 conector', query: 'Moto G54 conector' },
-    { label: 'Redmi Note 12', query: 'Redmi Note 12' },
+    { label: 'Redmi Note 13', query: 'Redmi Note 13' },
   ];
 
   // Smart Query Parser: detects service keywords in search string
@@ -208,10 +389,11 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
       raw.includes('desoxidação') ||
       raw.includes('agua') ||
       raw.includes('água') ||
-      raw.includes('banho')
+      raw.includes('banho') ||
+      raw.includes('limpeza')
     ) {
       detectedServiceId = 'srv-desoxidacao';
-      modelKeywords = raw.replace(/desoxidacao|desoxidação|agua|água|banho/g, '').trim();
+      modelKeywords = raw.replace(/desoxidacao|desoxidação|agua|água|banho|limpeza/g, '').trim();
     }
 
     return {
@@ -223,33 +405,75 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
 
   // When query matches a service keyword, preselect that service
   useEffect(() => {
-    if (parsedSearch.detectedServiceId) {
-      const srv = SERVICES.find((s) => s.id === parsedSearch.detectedServiceId);
+    if (parsedSearch.detectedServiceId && availableServices.length > 0) {
+      const srv = availableServices.find(
+        (s) =>
+          s.id === parsedSearch.detectedServiceId ||
+          s.name.toLowerCase().includes(parsedSearch.detectedServiceId.replace('srv-', ''))
+      );
       if (srv) {
         setSelectedService(srv);
       }
     }
-  }, [parsedSearch.detectedServiceId]);
+  }, [parsedSearch.detectedServiceId, availableServices]);
 
-  // Filter models based on brand and search query
+  // Filter models from company catalog
   const filteredModels = useMemo(() => {
     const term = parsedSearch.modelKeywords.toLowerCase();
 
-    return PHONE_MODELS.filter((model) => {
+    return companyDevices.filter((model) => {
+      if (!model.active) return false;
       if (selectedBrand !== 'Todas' && model.brand !== selectedBrand) {
         return false;
       }
       if (!term) return true;
 
-      const fullString = `${model.brand} ${model.name} ${model.id}`.toLowerCase();
+      const familyName = model.family || '';
+      const fullString = `${model.brand} ${model.name} ${familyName} ${model.id}`.toLowerCase();
       const normalizedName = model.name.toLowerCase().replace(/galaxy\s*/g, '');
 
       return fullString.includes(term) || normalizedName.includes(term);
     });
-  }, [selectedBrand, parsedSearch.modelKeywords]);
+  }, [companyDevices, selectedBrand, parsedSearch.modelKeywords]);
 
-  const handleSelectModel = (model: PhoneModel) => {
-    setSelectedModel(model);
+  const handleSelectModel = (model: UnifiedModelSelection | FullDeviceModel) => {
+    const familyOrSeries = 'family' in model ? model.family : model.series;
+    const yearNum =
+      typeof model.year === 'number'
+        ? model.year
+        : model.year
+        ? parseInt(String(model.year), 10) || undefined
+        : undefined;
+
+    setSelectedModel({
+      id: model.id,
+      brand: model.brand,
+      name: model.name,
+      series: familyOrSeries,
+      year: yearNum,
+      category: familyOrSeries || 'Intermediário',
+    });
+    // Auto-select first active service
+    const dev = companyDevices.find((d) => d.id === model.id);
+    if (dev && dev.services && dev.services.length > 0) {
+      const firstActive = dev.services.find((s) => s.active);
+      if (firstActive) {
+        setSelectedService({
+          id: firstActive.id,
+          name: firstActive.name,
+          category: firstActive.category,
+          iconName: firstActive.iconName,
+          hasQuality: firstActive.hasQuality,
+          basePrice: firstActive.suggestedPrice || 100,
+          minPrice: firstActive.minPrice,
+          suggestedPrice: firstActive.suggestedPrice,
+          maxPrice: firstActive.maxPrice,
+          warranty: firstActive.warranty,
+          estimatedTime: firstActive.estimatedTime,
+          qualities: firstActive.qualities,
+        });
+      }
+    }
   };
 
   const handleResetDevice = () => {
@@ -257,27 +481,117 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     setSelectedService(null);
   };
 
-  // Pricing calculation adhering to: Base Service Price * Model Tier Factor * Quality Multiplier + Service Type Fee - Discount
+  // 1. Min, Suggested and Max Price bounds for the selected combination (model + service + quality + serviceType)
+  const priceBounds = useMemo(() => {
+    if (!selectedModel || !selectedService) {
+      return { effectiveMin: 0, effectiveSuggested: 0, effectiveMax: 0 };
+    }
+
+    const extraFee = selectedServiceType?.extraFee || 0;
+
+    if (serviceRequiresQuality && selectedQuality) {
+      const qMin = selectedQuality.minPrice;
+      const qSug = selectedQuality.suggestedPrice;
+      const qMax = selectedQuality.maxPrice;
+      if (typeof qMin === 'number' && typeof qSug === 'number' && typeof qMax === 'number') {
+        return {
+          effectiveMin: Math.max(10, Math.round(qMin + extraFee)),
+          effectiveSuggested: Math.max(10, Math.round(qSug + extraFee)),
+          effectiveMax: Math.max(10, Math.round(qMax + extraFee)),
+        };
+      }
+    } else if (!serviceRequiresQuality) {
+      const sMin = selectedService.minPrice;
+      const sSug = selectedService.suggestedPrice;
+      const sMax = selectedService.maxPrice;
+      if (typeof sMin === 'number' && typeof sSug === 'number' && typeof sMax === 'number') {
+        return {
+          effectiveMin: Math.max(10, Math.round(sMin + extraFee)),
+          effectiveSuggested: Math.max(10, Math.round(sSug + extraFee)),
+          effectiveMax: Math.max(10, Math.round(sMax + extraFee)),
+        };
+      }
+    }
+
+    return calculatePriceBounds(
+      companySettings,
+      selectedModel as any,
+      selectedService as any,
+      selectedQuality,
+      selectedServiceType
+    );
+  }, [
+    selectedModel,
+    selectedService,
+    serviceRequiresQuality,
+    selectedQuality,
+    selectedServiceType,
+    companySettings,
+  ]);
+
+  // 2. User-editable cash price state
+  const [enteredPrice, setEnteredPrice] = useState<string>('');
+  const [lastAutoKey, setLastAutoKey] = useState<string>('');
+
+  // 3. Pre-fill with Preço Sugerido whenever the combination changes
+  useEffect(() => {
+    if (selectedModel && selectedService) {
+      const key = `${selectedModel.id}_${selectedService.id}_${selectedQuality?.id}_${selectedServiceType?.id}`;
+      if (key !== lastAutoKey) {
+        setLastAutoKey(key);
+        setEnteredPrice(priceBounds.effectiveSuggested.toString());
+      }
+    } else {
+      setEnteredPrice('');
+      setLastAutoKey('');
+    }
+  }, [
+    selectedModel,
+    selectedService,
+    selectedQuality?.id,
+    selectedServiceType?.id,
+    priceBounds.effectiveSuggested,
+    lastAutoKey,
+  ]);
+
+  // 4. Parse numeric price from entered string
+  const numericCashPrice = useMemo(() => {
+    if (!enteredPrice.trim()) return NaN;
+    const sanitized = enteredPrice.replace(/\./g, '').replace(',', '.');
+    return parseFloat(sanitized);
+  }, [enteredPrice]);
+
+  // 5. Validation logic: must be strictly between Preço Mínimo and Preço Máximo
+  const priceValidationError = useMemo(() => {
+    if (!selectedModel || !selectedService) return null;
+    if (!enteredPrice.trim() || isNaN(numericCashPrice)) {
+      return 'Informe um valor numérico válido para o orçamento.';
+    }
+    if (numericCashPrice < priceBounds.effectiveMin) {
+      return `O valor mínimo permitido para este serviço é R$ ${priceBounds.effectiveMin}.`;
+    }
+    if (numericCashPrice > priceBounds.effectiveMax) {
+      return `O valor máximo permitido para este serviço é R$ ${priceBounds.effectiveMax}.`;
+    }
+    return null;
+  }, [
+    selectedModel,
+    selectedService,
+    enteredPrice,
+    numericCashPrice,
+    priceBounds.effectiveMin,
+    priceBounds.effectiveMax,
+  ]);
+
+  const isPriceValid = !priceValidationError && !isNaN(numericCashPrice) && numericCashPrice > 0;
+
+  // 6. Pricing calculation adhering to: final chosen cash price + card installments
   const priceData = useMemo(() => {
     if (!selectedModel || !selectedService) {
       return { cash: 0, installments: 0, installmentsCount: 3, installmentValue: 0, additionalFee: 0 };
     }
 
-    // Model tier factor
-    let modelFactor = 1.0;
-    if (selectedModel.category === 'Premium') {
-      modelFactor = selectedModel.brand === 'Apple' ? 1.65 : 1.45;
-    } else if (selectedModel.category === 'Intermediário') {
-      modelFactor = 1.0;
-    } else {
-      modelFactor = 0.85;
-    }
-
-    const qualityMultiplier = selectedQuality?.priceMultiplier || 1.0;
-    const additionalFee = selectedServiceType?.extraFee || 0;
-
-    const baseCost = selectedService.basePrice * modelFactor * qualityMultiplier;
-    const finalCash = Math.max(10, Math.round(baseCost + additionalFee - customDiscount));
+    const finalCash = isPriceValid ? numericCashPrice : (priceBounds.effectiveSuggested || 0);
     // Card installments price has standard credit gateway margin (~9%)
     const finalInstallments = Math.max(10, Math.round(finalCash * 1.09));
     const installmentsCount = 3;
@@ -288,9 +602,9 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
       installments: finalInstallments,
       installmentsCount,
       installmentValue,
-      additionalFee,
+      additionalFee: selectedServiceType?.extraFee || 0,
     };
-  }, [selectedModel, selectedService, selectedQuality, selectedServiceType, customDiscount]);
+  }, [selectedModel, selectedService, isPriceValid, numericCashPrice, priceBounds.effectiveSuggested, selectedServiceType]);
 
   // Format phone Brazilian (XX) XXXXX-XXXX
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -308,7 +622,7 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
 
   // Generate Quote Handler
   const handleGenerateQuote = () => {
-    if (!selectedModel || !selectedService) return;
+    if (!selectedModel || !selectedService || !isPriceValid) return;
 
     const randomNum = Math.floor(100 + Math.random() * 900);
     const dateStr =
@@ -326,8 +640,8 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
       deviceBrand: selectedModel.brand,
       serviceId: selectedService.id,
       serviceName: selectedService.name,
-      qualityTier: selectedQuality?.id || 'default',
-      qualityLabel: selectedQuality?.label || 'Padrão',
+      qualityTier: serviceRequiresQuality ? (selectedQuality?.id || 'default') : 'na',
+      qualityLabel: serviceRequiresQuality ? (selectedQuality?.label || 'Padrão') : 'Não se aplica',
       deliveryTime: customDeliveryTime,
       warranty: selectedWarranty,
       serviceTypeName: selectedServiceType?.name || 'Atendimento na Loja',
@@ -335,9 +649,12 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
       technicianId: selectedTechnician?.id,
       technicianName: selectedTechnician?.name || currentUser?.name || 'Técnico',
       storeName: currentStore.name,
-      cashPrice: priceData.cash,
+      cashPrice: numericCashPrice, // O preço final efetivamente oferecido ao cliente
       installmentsPrice: priceData.installments,
       installmentsCount: priceData.installmentsCount,
+      minAllowedPrice: priceBounds.effectiveMin,
+      maxAllowedPrice: priceBounds.effectiveMax,
+      suggestedPrice: priceBounds.effectiveSuggested,
       status: 'Pendente',
       companyId: companySettings.companyId,
     };
@@ -552,17 +869,24 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
 
           {/* STEP 2: ESCOLHER SERVIÇO */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                2
-              </span>
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Serviço Solicitado
-              </label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  2
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Serviço Solicitado
+                </label>
+              </div>
+              {selectedModel && (
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {availableServices.length} serviços cadastrados
+                </span>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {SERVICES.map((srv) => {
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[320px] overflow-y-auto pr-1">
+              {availableServices.map((srv) => {
                 const isSelected = selectedService?.id === srv.id;
                 return (
                   <button
@@ -589,7 +913,9 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
                           {srv.name}
                         </span>
                         <span className="block text-[10px] text-slate-500">
-                          Base: R$ {srv.basePrice.toFixed(2).replace('.', ',')}
+                          {typeof srv.suggestedPrice === 'number'
+                            ? `Sugerido: R$ ${srv.suggestedPrice} (Min: ${srv.minPrice} • Max: ${srv.maxPrice})`
+                            : `Base: R$ ${srv.basePrice.toFixed(2).replace('.', ',')}`}
                         </span>
                       </div>
                     </div>
@@ -604,78 +930,89 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             </div>
           </div>
 
-          {/* STEP 3: QUALIDADE DA PEÇA (Loaded dynamically from Company Settings) */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                  3
+          {/* STEP 3: QUALIDADE DA PEÇA - Apenas para Tela e Bateria conforme regra especial */}
+          {serviceRequiresQuality && (
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                    {stepNumbers.quality}
+                  </span>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Qualidade da Peça
+                  </label>
+                </div>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Regra especial (Tela & Bateria)
                 </span>
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Qualidade da Peça
-                </label>
               </div>
-              <span className="text-[10px] text-slate-400 font-medium">
-                Configurada pela empresa
-              </span>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {activeQualities.map((qual) => {
-                const isSelected = selectedQuality?.id === qual.id;
-                return (
-                  <button
-                    key={qual.id}
-                    id={`quality-opt-${qual.id}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedQuality(qual);
-                      if (qual.warrantyDefault && !isCustomWarrantyMode) {
-                        setSelectedWarranty(qual.warrantyDefault);
-                      }
-                    }}
-                    className={`p-3 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between border ${
-                      isSelected
-                        ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
-                        : 'border-slate-200 bg-white hover:border-slate-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span className="text-xs font-bold text-slate-900">{qual.label}</span>
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
-                            isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {qual.badge}
-                        </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {availableQualities.map((qual) => {
+                  const isSelected = selectedQuality?.id === qual.id;
+                  return (
+                    <button
+                      key={qual.id}
+                      id={`quality-opt-${qual.id}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedQuality(qual);
+                        if (qual.warrantyDefault && !isCustomWarrantyMode) {
+                          setSelectedWarranty(qual.warrantyDefault);
+                        }
+                        if (qual.estimatedTime) {
+                          setCustomDeliveryTime(qual.estimatedTime);
+                        }
+                      }}
+                      className={`p-3 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between border ${
+                        isSelected
+                          ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-xs font-bold text-slate-900">{qual.label}</span>
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                              isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {qual.badge}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 line-clamp-2 leading-tight">
+                          {qual.description}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-slate-500 line-clamp-2 leading-tight">
-                        {qual.description}
-                      </p>
-                    </div>
 
-                    <div className="mt-2.5 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400 text-[10px]">Fator {qual.priceMultiplier}x</span>
-                      {isSelected && (
-                        <span className="text-blue-700 font-bold flex items-center gap-0.5 text-[10px]">
-                          <Check className="w-3 h-3" /> Ativa
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                      <div className="mt-2.5 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                        {typeof qual.suggestedPrice === 'number' ? (
+                          <span className="text-slate-700 font-bold text-[10px]">
+                            R$ {qual.suggestedPrice}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">Fator {qual.priceMultiplier}x</span>
+                        )}
+                        {isSelected && (
+                          <span className="text-blue-700 font-bold flex items-center gap-0.5 text-[10px]">
+                            <Check className="w-3 h-3" /> Ativa
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* STEP 4: GARANTIA (Loaded dynamically from Company Settings + Custom typing) */}
+          {/* STEP 4 (ou 3): GARANTIA (Loaded dynamically from Company Settings + Custom typing) */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                  4
+                  {stepNumbers.warranty}
                 </span>
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Garantia do Serviço
@@ -719,7 +1056,7 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
               })}
             </div>
 
-            {/* Custom warranty text input (explicitly requested) */}
+            {/* Custom warranty text input */}
             {isCustomWarrantyMode && (
               <div className="pt-1">
                 <label className="block text-[11px] font-medium text-slate-500 mb-1">
@@ -741,12 +1078,12 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             )}
           </div>
 
-          {/* STEP 5: TIPO DE ATENDIMENTO (Loaded dynamically from Company Settings) */}
+          {/* STEP 5 (ou 4): TIPO DE ATENDIMENTO (Loaded dynamically from Company Settings) */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                  5
+                  {stepNumbers.serviceType}
                 </span>
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Tipo de Atendimento
@@ -799,12 +1136,12 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             </div>
           </div>
 
-          {/* STEP 6: TÉCNICO RESPONSÁVEL (Loaded dynamically from Company Settings) */}
+          {/* STEP 6 (ou 5): TÉCNICO RESPONSÁVEL (Loaded dynamically from Company Settings) */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                  6
+                  {stepNumbers.technician}
                 </span>
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Técnico Responsável
@@ -855,12 +1192,141 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             </div>
           </div>
 
-          {/* STEP 7: DADOS DO CLIENTE & PRAZO (Opcional) */}
+          {/* STEP 7 (ou 6): VALOR DO ORÇAMENTO (Editável dentro da faixa comercial) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  {stepNumbers.price}
+                </span>
+                <div>
+                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    Preço do Serviço (Editável)
+                  </label>
+                  <span className="text-[11px] text-slate-500">
+                    Preço sugerido preenchido automaticamente. Você pode ajustar livremente dentro da faixa comercial permitida.
+                  </span>
+                </div>
+              </div>
+
+              {selectedModel && selectedService && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold self-start sm:self-auto">
+                  <span>Faixa permitida:</span>
+                  <strong className="text-slate-900">
+                    R$ {priceBounds.effectiveMin} – R$ {priceBounds.effectiveMax}
+                  </strong>
+                </div>
+              )}
+            </div>
+
+            {selectedModel && selectedService ? (
+              <div className="space-y-3 pt-1">
+                {/* Quick preset chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">
+                    Valores de Referência:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEnteredPrice(priceBounds.effectiveMin.toString())}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      numericCashPrice === priceBounds.effectiveMin
+                        ? 'bg-blue-50 border-blue-300 text-blue-700 ring-1 ring-blue-400'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Mínimo: R$ {priceBounds.effectiveMin}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEnteredPrice(priceBounds.effectiveSuggested.toString())}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-colors cursor-pointer ${
+                      numericCashPrice === priceBounds.effectiveSuggested
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                        : 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'
+                    }`}
+                  >
+                    Sugerido: R$ {priceBounds.effectiveSuggested}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEnteredPrice(priceBounds.effectiveMax.toString())}
+                    className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors cursor-pointer ${
+                      numericCashPrice === priceBounds.effectiveMax
+                        ? 'bg-blue-50 border-blue-300 text-blue-700 ring-1 ring-blue-400'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Máximo: R$ {priceBounds.effectiveMax}
+                  </button>
+                </div>
+
+                {/* Main editable input field */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Preço Final do Orçamento (R$)</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-bold text-sm">
+                        R$
+                      </div>
+                      <input
+                        id="quote-cash-price-input"
+                        type="text"
+                        value={enteredPrice}
+                        onChange={(e) => setEnteredPrice(e.target.value)}
+                        placeholder={priceBounds.effectiveSuggested.toString()}
+                        className={`w-full pl-10 pr-24 py-2.5 bg-slate-50 border rounded-xl text-base font-bold text-slate-900 focus:outline-none focus:bg-white transition-all ${
+                          priceValidationError
+                            ? 'border-rose-400 bg-rose-50/50 text-rose-900 focus:border-rose-600 focus:ring-1 focus:ring-rose-500'
+                            : 'border-slate-200 focus:border-blue-600 focus:ring-1 focus:ring-blue-500'
+                        }`}
+                      />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-slate-400 font-medium pointer-events-none">
+                        à vista
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status / feedback message */}
+                  <div className="pt-2 sm:pt-6">
+                    {priceValidationError ? (
+                      <div
+                        id="price-validation-error-alert"
+                        className="flex items-start gap-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium animate-in fade-in duration-150"
+                      >
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <span>{priceValidationError}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 stroke-[3]" />
+                        <span>Valor dentro da faixa permitida para o orçamento.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-2.5">
+                  <span>Faixa permitida: R$ {priceBounds.effectiveMin} – R$ {priceBounds.effectiveMax}</span>
+                  <span>O cliente receberá apenas o preço final escolhido.</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center text-xs text-slate-400">
+                Selecione o aparelho e o serviço nos passos 1 e 2 para carregar a faixa de preço permitida.
+              </div>
+            )}
+          </div>
+
+          {/* STEP 8: DADOS DO CLIENTE & PRAZO (Opcional) */}
           <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
-                  7
+                  8
                 </span>
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Dados do Cliente & Prazo (Opcional)
@@ -953,48 +1419,67 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
                 </span>
               </div>
 
-              <div className="flex justify-between border-b border-white/10 pb-2.5">
-                <span className="text-slate-400">3. Qualidade</span>
-                <span className="font-semibold text-white">
-                  {selectedQuality ? selectedQuality.label : 'Padrão'}
-                </span>
-              </div>
+              {serviceRequiresQuality && (
+                <div className="flex justify-between border-b border-white/10 pb-2.5">
+                  <span className="text-slate-400">{stepNumbers.quality}. Qualidade</span>
+                  <span className="font-semibold text-white">
+                    {selectedQuality ? selectedQuality.label : 'Padrão'}
+                  </span>
+                </div>
+              )}
 
               <div className="flex justify-between border-b border-white/10 pb-2.5">
-                <span className="text-slate-400">4. Garantia</span>
+                <span className="text-slate-400">{stepNumbers.warranty}. Garantia</span>
                 <span className="font-semibold text-white truncate max-w-[190px] text-right">
                   {selectedWarranty}
                 </span>
               </div>
 
               <div className="flex justify-between border-b border-white/10 pb-2.5">
-                <span className="text-slate-400">5. Atendimento</span>
+                <span className="text-slate-400">{stepNumbers.serviceType}. Atendimento</span>
                 <span className="font-semibold text-white truncate max-w-[190px] text-right">
                   {selectedServiceType?.name || 'Na Loja'}
                 </span>
               </div>
 
               <div className="flex justify-between border-b border-white/10 pb-2.5">
-                <span className="text-slate-400">6. Técnico</span>
+                <span className="text-slate-400">{stepNumbers.technician}. Técnico</span>
                 <span className="font-semibold text-white truncate max-w-[190px] text-right">
                   {selectedTechnician?.name || 'Equipe Técnica'}
                 </span>
               </div>
 
               {/* Total Price breakdown */}
-              <div className="pt-3">
+              <div className="pt-3 border-t border-white/10 space-y-2">
                 <div className="flex justify-between items-end">
                   <div>
-                    <span className="text-xs text-slate-400 block font-medium">Total à vista (Pix/Dinheiro)</span>
-                    <span className="text-[11px] text-slate-400">
-                      Ou {priceData.installmentsCount}x de R${' '}
-                      {priceData.installmentValue.toFixed(2).replace('.', ',')} no cartão
+                    <span className="text-xs text-slate-300 block font-bold">Total à vista (Pix/Dinheiro)</span>
+                    {selectedModel && selectedService && (
+                      <span className="text-[11px] text-slate-400 block mt-0.5 font-medium">
+                        Faixa permitida: R$ {priceBounds.effectiveMin} – R$ {priceBounds.effectiveMax}
+                      </span>
+                    )}
+                    {isPriceValid && (
+                      <span className="text-[11px] text-slate-400 block mt-1">
+                        Ou {priceData.installmentsCount}x de R${' '}
+                        {priceData.installmentValue.toFixed(2).replace('.', ',')} no cartão
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-2xl sm:text-3xl font-black ${isPriceValid ? 'text-blue-400' : 'text-rose-400'}`}>
+                      {isPriceValid ? `R$ ${numericCashPrice.toFixed(2).replace('.', ',')}` : 'Valor Fora da Faixa'}
                     </span>
                   </div>
-                  <span className="text-2xl sm:text-3xl font-black text-blue-400">
-                    R$ {priceData.cash.toFixed(2).replace('.', ',')}
-                  </span>
                 </div>
+
+                {/* Warning / Error banner when outside bounds */}
+                {priceValidationError && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2 animate-in fade-in duration-150">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span className="font-semibold">{priceValidationError}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1002,10 +1487,10 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             <button
               id="btn-generate-quote-submit"
               type="button"
-              disabled={!selectedModel || !selectedService}
+              disabled={!selectedModel || !selectedService || !isPriceValid}
               onClick={handleGenerateQuote}
               className={`w-full font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-5 uppercase tracking-wider text-xs sm:text-sm cursor-pointer ${
-                selectedModel && selectedService
+                selectedModel && selectedService && isPriceValid
                   ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.99] shadow-blue-900/40'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
@@ -1030,9 +1515,9 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             <p className="text-xs text-slate-600 italic bg-white p-3 rounded-xl border border-emerald-100 leading-relaxed">
               "Olá{clientName ? ` *${clientName}*` : ''}! O orçamento para o seu{' '}
               <strong>{selectedModel?.name || 'aparelho'}</strong> (
-              {selectedService?.name || 'serviço'} {selectedQuality?.label}) na modalidade{' '}
+              {selectedService?.name || 'serviço'}{serviceRequiresQuality && selectedQuality ? ` - ${selectedQuality.label}` : ''}) na modalidade{' '}
               <strong>{selectedServiceType?.name}</strong> ficou em{' '}
-              <strong>R$ {priceData.cash.toFixed(2).replace('.', ',')}</strong> à vista com garantia de{' '}
+              <strong>R$ {isPriceValid ? numericCashPrice.toFixed(2).replace('.', ',') : (priceBounds.effectiveSuggested || 0).toFixed(2).replace('.', ',')}</strong> à vista com garantia de{' '}
               <strong>{selectedWarranty}</strong> com o técnico{' '}
               <strong>{selectedTechnician?.name}</strong>. Deseja aprovar agora?"
             </p>
@@ -1041,7 +1526,7 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
               id="btn-quick-send-whatsapp-preview"
               type="button"
               onClick={handleGenerateQuote}
-              disabled={!selectedModel || !selectedService}
+              disabled={!selectedModel || !selectedService || !isPriceValid}
               className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MessageCircle className="w-4 h-4 fill-white" />
