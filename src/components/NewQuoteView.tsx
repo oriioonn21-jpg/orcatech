@@ -162,18 +162,18 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     }
 
     const dev = companyDevices.find(
-      (d) => d.id === selectedModel.id || d.name.toLowerCase() === selectedModel.name.toLowerCase()
+      (d) => d.id === selectedModel.id || (d.name && d.name.toLowerCase() === selectedModel.name.toLowerCase())
     );
 
-    if (dev && dev.services && dev.services.length > 0) {
+    if (dev && Array.isArray(dev.services) && dev.services.length > 0) {
       return dev.services
-        .filter((s) => s.active)
+        .filter((s) => s && s.active)
         .map((s) => ({
-          id: s.id,
-          name: s.name,
-          category: s.category,
-          iconName: s.iconName,
-          hasQuality: s.hasQuality,
+          id: s.id || `srv-${s.serviceId}`,
+          name: s.serviceName || s.name || 'Serviço',
+          category: s.category || 'Geral',
+          iconName: s.iconName || 'Wrench',
+          hasQuality: Boolean(s.hasQuality),
           basePrice: s.suggestedPrice || 100,
           minPrice: s.minPrice,
           suggestedPrice: s.suggestedPrice,
@@ -197,7 +197,7 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
   // Special Rule: ONLY "Troca de Tela" and "Troca de Bateria" require quality
   const serviceRequiresQuality = useMemo(() => {
     if (!selectedService) return false;
-    const name = selectedService.name.toLowerCase();
+    const name = String(selectedService.name || (selectedService as any).serviceName || '').toLowerCase();
     if (name.includes('tela') || name.includes('bateria')) return true;
     return Boolean(selectedService.hasQuality);
   }, [selectedService]);
@@ -455,15 +455,16 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     });
     // Auto-select first active service
     const dev = companyDevices.find((d) => d.id === model.id);
-    if (dev && dev.services && dev.services.length > 0) {
-      const firstActive = dev.services.find((s) => s.active);
+    if (dev && Array.isArray(dev.services) && dev.services.length > 0) {
+      const firstActive = dev.services.find((s) => s && s.active);
       if (firstActive) {
+        const sName = firstActive.serviceName || firstActive.name || 'Serviço';
         setSelectedService({
-          id: firstActive.id,
-          name: firstActive.name,
-          category: firstActive.category,
-          iconName: firstActive.iconName,
-          hasQuality: firstActive.hasQuality,
+          id: firstActive.id || `srv-${firstActive.serviceId}`,
+          name: sName,
+          category: firstActive.category || 'Geral',
+          iconName: firstActive.iconName || 'Wrench',
+          hasQuality: Boolean(firstActive.hasQuality),
           basePrice: firstActive.suggestedPrice || 100,
           minPrice: firstActive.minPrice,
           suggestedPrice: firstActive.suggestedPrice,

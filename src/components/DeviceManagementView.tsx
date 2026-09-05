@@ -37,6 +37,8 @@ import {
   ArrowRight,
   RefreshCw,
   Tag,
+  ArrowLeft,
+  Save,
 } from 'lucide-react';
 import { FullDeviceModel, DeviceServiceConfig, ServiceQualityConfig, BrandName, CompanyQuoteSettings } from '../types';
 import {
@@ -46,6 +48,8 @@ import {
   duplicateDeviceModel,
   applyServiceToMultipleModels,
   filterDevices,
+  normalizeDevice,
+  generateDefaultServicesForModel,
   INITIAL_SERVICE_DEFINITIONS,
   INITIAL_SCREEN_QUALITIES,
   INITIAL_BATTERY_QUALITIES,

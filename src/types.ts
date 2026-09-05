@@ -23,6 +23,7 @@ export interface DeviceServiceConfig {
   id: string;
   serviceId: string;
   serviceName: string; // e.g. "Troca de Tela", "Troca de Bateria", "Conector de Carga", etc.
+  name?: string; // Backwards compatibility alias for components accessing s.name
   category?: string;
   iconName?: string;
   hasQuality: boolean; // TRUE strictly for Troca de Tela and Troca de Bateria; FALSE for all others

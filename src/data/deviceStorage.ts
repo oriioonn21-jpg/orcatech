@@ -191,6 +191,135 @@ function deriveYear(name: string): number | undefined {
   return undefined;
 }
 
+// Normalize individual Quality tier with safe fallbacks
+export function normalizeQuality(q: any, defaultIndex: number = 0): ServiceQualityConfig {
+  if (!q) {
+    return {
+      id: `q-${Date.now()}-${defaultIndex}`,
+      name: `Qualidade ${defaultIndex + 1}`,
+      minPrice: 0,
+      suggestedPrice: 0,
+      maxPrice: 0,
+      warranty: '',
+      estimatedTime: '',
+      internalNotes: '',
+      active: true,
+    };
+  }
+
+  return {
+    id: String(q.id || `q-${Date.now()}-${defaultIndex}`),
+    name: String(q.name || q.label || ''),
+    minPrice: typeof q.minPrice === 'number' ? q.minPrice : (typeof q.basePrice === 'number' ? q.basePrice : 0),
+    suggestedPrice: typeof q.suggestedPrice === 'number' ? q.suggestedPrice : (typeof q.basePrice === 'number' ? q.basePrice : 0),
+    maxPrice: typeof q.maxPrice === 'number' ? q.maxPrice : (typeof q.basePrice === 'number' ? q.basePrice : 0),
+    warranty: String(q.warranty || ''),
+    estimatedTime: String(q.estimatedTime || q.time || ''),
+    internalNotes: String(q.internalNotes || ''),
+    active: q.active !== false,
+  };
+}
+
+// Normalize Service with strict rule:
+// Tela e Bateria: podem possuir qualidades (se inexistentes, array vazio)
+// Demais serviços: não possuem qualidade (preços diretos, se inexistentes valores seguros)
+export function normalizeService(s: any, brand: BrandName = 'Apple'): DeviceServiceConfig {
+  if (!s) {
+    return {
+      id: `cfg-${Date.now()}`,
+      serviceId: `srv-${Date.now()}`,
+      serviceName: 'Serviço',
+      name: 'Serviço',
+      hasQuality: false,
+      active: true,
+      minPrice: 0,
+      suggestedPrice: 0,
+      maxPrice: 0,
+      warranty: '',
+      estimatedTime: '',
+      internalNotes: '',
+    };
+  }
+
+  const serviceName = String(s.serviceName || s.name || 'Serviço');
+  const serviceId = String(s.serviceId || s.id || `srv-${Date.now()}`);
+
+  const isScreenOrBattery =
+    s.hasQuality === true ||
+    serviceName.toLowerCase().includes('tela') ||
+    serviceName.toLowerCase().includes('bateria');
+
+  let qualities: ServiceQualityConfig[] | undefined = undefined;
+
+  if (isScreenOrBattery) {
+    if (Array.isArray(s.qualities)) {
+      qualities = s.qualities.map((q: any, idx: number) => normalizeQuality(q, idx));
+    } else {
+      // qualidades inexistentes → array vazio conforme solicitado
+      qualities = [];
+    }
+  }
+
+  return {
+    id: String(s.id || `cfg-${serviceId}`),
+    serviceId: serviceId,
+    serviceName: serviceName,
+    name: serviceName, // Alias for backwards compatibility with any component accessing s.name
+    category: s.category || (isScreenOrBattery ? (serviceName.toLowerCase().includes('tela') ? 'Display' : 'Energia') : 'Geral'),
+    iconName: s.iconName || (serviceName.toLowerCase().includes('tela') ? 'Smartphone' : serviceName.toLowerCase().includes('bateria') ? 'Battery' : 'Wrench'),
+    hasQuality: isScreenOrBattery,
+    active: s.active !== false,
+    qualities: isScreenOrBattery ? (qualities || []) : undefined,
+    minPrice: typeof s.minPrice === 'number' ? s.minPrice : (typeof s.basePrice === 'number' ? s.basePrice : 0),
+    suggestedPrice: typeof s.suggestedPrice === 'number' ? s.suggestedPrice : (typeof s.basePrice === 'number' ? s.basePrice : 0),
+    maxPrice: typeof s.maxPrice === 'number' ? s.maxPrice : (typeof s.basePrice === 'number' ? s.basePrice : 0),
+    warranty: String(s.warranty || ''),
+    estimatedTime: String(s.estimatedTime || s.time || ''),
+    internalNotes: String(s.internalNotes || ''),
+  };
+}
+
+// Normalize device object ensuring backwards compatibility with legacy catalogs
+export function normalizeDevice(d: any): FullDeviceModel {
+  if (!d) {
+    return {
+      id: `dev-${Date.now()}`,
+      brand: 'Apple',
+      name: 'Aparelho',
+      family: 'Geral',
+      active: true,
+      services: [],
+    };
+  }
+
+  const brand: BrandName = (d.brand as BrandName) || 'Apple';
+  const name = String(d.name || 'Aparelho');
+  const family = String(d.family || deriveFamily(brand, name) || 'Geral');
+  const year = d.year !== undefined && d.year !== null && d.year !== '' ? d.year : deriveYear(name);
+
+  let services: DeviceServiceConfig[] = [];
+  if (Array.isArray(d.services)) {
+    services = d.services.map((s: any) => normalizeService(s, brand));
+  } else {
+    // serviços inexistentes → array vazio conforme solicitado
+    services = [];
+  }
+
+  return {
+    id: String(d.id || `dev-${Date.now()}`),
+    companyId: d.companyId,
+    brand: brand,
+    name: name,
+    family: family,
+    year: year,
+    active: d.active !== false,
+    category: d.category || 'Intermediário',
+    image: d.image,
+    popular: Boolean(d.popular),
+    services: services,
+  };
+}
+
 // Build initial devices from PHONE_MODELS
 export function getInitialDevices(): FullDeviceModel[] {
   // Ensure we include the explicit requested examples:
@@ -261,7 +390,7 @@ const STORAGE_PREFIX = 'orcatech_device_catalog_';
 // Retrieve all devices for a company with local persistence
 export function getCompanyDevices(companyId: string): FullDeviceModel[] {
   if (typeof window === 'undefined') {
-    return getInitialDevices();
+    return getInitialDevices().map(normalizeDevice);
   }
 
   const key = `${STORAGE_PREFIX}${companyId}`;
@@ -271,7 +400,8 @@ export function getCompanyDevices(companyId: string): FullDeviceModel[] {
     try {
       const parsed = JSON.parse(stored);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // Normalize each stored record to ensure backwards compatibility with legacy catalogs
+        return parsed.map(normalizeDevice);
       }
     } catch (e) {
       console.error('Error reading stored devices', e);
@@ -279,7 +409,7 @@ export function getCompanyDevices(companyId: string): FullDeviceModel[] {
   }
 
   // First time: initialize and persist
-  const initial = getInitialDevices();
+  const initial = getInitialDevices().map(normalizeDevice);
   saveCompanyDevices(companyId, initial);
   return initial;
 }
@@ -288,19 +418,21 @@ export function getCompanyDevices(companyId: string): FullDeviceModel[] {
 export function saveCompanyDevices(companyId: string, devices: FullDeviceModel[]): void {
   if (typeof window === 'undefined') return;
   const key = `${STORAGE_PREFIX}${companyId}`;
-  localStorage.setItem(key, JSON.stringify(devices));
+  const normalizedList = (Array.isArray(devices) ? devices : []).map(normalizeDevice);
+  localStorage.setItem(key, JSON.stringify(normalizedList));
 }
 
 // Save single device (update existing or add new)
 export function saveSingleDevice(companyId: string, device: FullDeviceModel): FullDeviceModel[] {
+  const normalized = normalizeDevice(device);
   const current = getCompanyDevices(companyId);
-  const exists = current.findIndex((d) => d.id === device.id);
+  const exists = current.findIndex((d) => d.id === normalized.id);
   let updated: FullDeviceModel[];
 
   if (exists >= 0) {
-    updated = current.map((d) => (d.id === device.id ? device : d));
+    updated = current.map((d) => (d.id === normalized.id ? normalized : d));
   } else {
-    updated = [device, ...current];
+    updated = [normalized, ...current];
   }
 
   saveCompanyDevices(companyId, updated);
@@ -324,19 +456,20 @@ export function duplicateDeviceModel(
   newYear?: number | string
 ): { updatedDevices: FullDeviceModel[]; newDevice: FullDeviceModel } {
   const current = getCompanyDevices(companyId);
-  const source = current.find((d) => d.id === sourceDeviceId);
+  const rawSource = current.find((d) => d.id === sourceDeviceId);
 
-  if (!source) {
+  if (!rawSource) {
     throw new Error('Aparelho de origem não encontrado.');
   }
 
+  const source = normalizeDevice(rawSource);
   const newId = `dev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
   // Deep clone services and their qualities
-  const clonedServices: DeviceServiceConfig[] = source.services.map((srv) => ({
+  const clonedServices: DeviceServiceConfig[] = (source.services || []).map((srv) => ({
     ...srv,
-    id: `cfg-${srv.serviceId}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-    qualities: srv.qualities
+    id: `cfg-${srv.serviceId || 'srv'}-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+    qualities: Array.isArray(srv.qualities)
       ? srv.qualities.map((q) => ({
           ...q,
           id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
@@ -367,15 +500,17 @@ export function applyServiceToMultipleModels(
   targetDeviceIds: string[]
 ): FullDeviceModel[] {
   const current = getCompanyDevices(companyId);
-  const source = current.find((d) => d.id === sourceDeviceId);
+  const rawSource = current.find((d) => d.id === sourceDeviceId);
 
-  if (!source) {
+  if (!rawSource) {
     throw new Error('Aparelho de origem não encontrado.');
   }
 
+  const source = normalizeDevice(rawSource);
   const targetSet = new Set(targetDeviceIds);
 
-  const updatedDevices = current.map((target) => {
+  const updatedDevices = current.map((rawTarget) => {
+    const target = normalizeDevice(rawTarget);
     if (!targetSet.has(target.id) || target.id === source.id) {
       return target;
     }
@@ -384,10 +519,10 @@ export function applyServiceToMultipleModels(
 
     if (serviceIdToApply === 'ALL') {
       // Apply all services from source
-      updatedServices = source.services.map((s) => ({
+      updatedServices = (source.services || []).map((s) => ({
         ...s,
         id: `cfg-${s.serviceId}-${target.id}`,
-        qualities: s.qualities
+        qualities: Array.isArray(s.qualities)
           ? s.qualities.map((q) => ({
               ...q,
               id: `q-${target.id}-${Math.random().toString(36).substring(2, 6)}`,
@@ -396,16 +531,16 @@ export function applyServiceToMultipleModels(
       }));
     } else {
       // Apply only one specific service
-      const sourceService = source.services.find(
+      const sourceService = (source.services || []).find(
         (s) => s.serviceId === serviceIdToApply || s.id === serviceIdToApply || s.serviceName === serviceIdToApply
       );
 
       if (!sourceService) return target;
 
-      const cloned = {
+      const cloned: DeviceServiceConfig = {
         ...sourceService,
         id: `cfg-${sourceService.serviceId}-${target.id}`,
-        qualities: sourceService.qualities
+        qualities: Array.isArray(sourceService.qualities)
           ? sourceService.qualities.map((q) => ({
               ...q,
               id: `q-${target.id}-${Math.random().toString(36).substring(2, 6)}`,
@@ -413,14 +548,15 @@ export function applyServiceToMultipleModels(
           : undefined,
       };
 
-      const existingIndex = target.services.findIndex(
+      const targetServices = target.services || [];
+      const existingIndex = targetServices.findIndex(
         (s) => s.serviceId === sourceService.serviceId || s.serviceName === sourceService.serviceName
       );
 
       if (existingIndex >= 0) {
-        updatedServices = target.services.map((s, idx) => (idx === existingIndex ? cloned : s));
+        updatedServices = targetServices.map((s, idx) => (idx === existingIndex ? cloned : s));
       } else {
-        updatedServices = [...target.services, cloned];
+        updatedServices = [...targetServices, cloned];
       }
     }
 
@@ -440,22 +576,26 @@ export function filterDevices(
   searchTerm: string,
   selectedBrand?: BrandName | 'Todas'
 ): FullDeviceModel[] {
-  let list = devices;
+  if (!Array.isArray(devices)) {
+    return [];
+  }
+
+  let list = devices.map(normalizeDevice);
 
   if (selectedBrand && selectedBrand !== 'Todas') {
     list = list.filter((d) => d.brand === selectedBrand);
   }
 
-  if (!searchTerm.trim()) {
+  if (!searchTerm || !searchTerm.trim()) {
     return list;
   }
 
   const query = searchTerm.toLowerCase().trim();
   return list.filter(
     (d) =>
-      d.name.toLowerCase().includes(query) ||
-      d.brand.toLowerCase().includes(query) ||
-      d.family.toLowerCase().includes(query) ||
-      (d.year && String(d.year).includes(query))
+      (d.name || '').toLowerCase().includes(query) ||
+      (d.brand || '').toLowerCase().includes(query) ||
+      (d.family || '').toLowerCase().includes(query) ||
+      (d.year !== undefined && d.year !== null && String(d.year).includes(query))
   );
 }
