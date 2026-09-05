@@ -1,0 +1,6 @@
+{
+  "name": "OrçaTech - Orçamentos Rápidos",
+  "description": "Sistema SaaS para assistências técnicas gerarem orçamentos de celulares em segundos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
