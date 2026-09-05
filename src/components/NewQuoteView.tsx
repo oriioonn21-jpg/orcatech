@@ -1,68 +1,72 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
-  X,
+  Sparkles,
+  Check,
   Smartphone,
-  Wrench,
   Shield,
   Clock,
-  Check,
-  Sparkles,
-  ArrowLeft,
+  MessageCircle,
+  Phone,
+  User,
+  ArrowRight,
+  RotateCcw,
+  Sliders,
   ChevronRight,
-  BatteryCharging,
+  Info,
+  Wrench,
+  Battery,
   Zap,
   Camera,
   Volume2,
-  Droplets,
-  DollarSign,
-  User,
-  Phone,
-  Layers,
+  Maximize2,
+  X,
+  Truck,
+  MapPin,
+  UserCheck,
+  Tag,
+  Building2,
 } from 'lucide-react';
 import {
   BrandName,
   PhoneModel,
   ServiceItem,
-  QualityOption,
   Quote,
-  QualityTier,
   StaffMember,
   StoreLocation,
+  CompanyQuoteSettings,
+  PartQualityConfig,
+  WarrantyConfig,
+  ServiceTypeConfig,
+  TechnicianConfig,
 } from '../types';
-import {
-  BRANDS,
-  PHONE_MODELS,
-  SERVICES,
-  QUALITY_OPTIONS,
-  calculateServicePrice,
-} from '../data/mockData';
+import { BRANDS, PHONE_MODELS, SERVICES } from '../data/mockData';
 
 interface NewQuoteViewProps {
   currentUser: StaffMember | null;
   currentStore: StoreLocation;
+  companySettings: CompanyQuoteSettings;
   initialBrand?: BrandName;
   onQuoteGenerated: (quote: Quote) => void;
   onCancel: () => void;
 }
 
-// Icon helper for services
+// Helper to render service icons dynamically
 const renderServiceIcon = (iconName: string, className = 'w-5 h-5') => {
   switch (iconName) {
     case 'Smartphone':
       return <Smartphone className={className} />;
-    case 'BatteryCharging':
-      return <BatteryCharging className={className} />;
+    case 'Battery':
+      return <Battery className={className} />;
     case 'Zap':
       return <Zap className={className} />;
     case 'Camera':
       return <Camera className={className} />;
     case 'Volume2':
       return <Volume2 className={className} />;
-    case 'Shield':
-      return <Shield className={className} />;
-    case 'Droplets':
-      return <Droplets className={className} />;
+    case 'Maximize2':
+      return <Maximize2 className={className} />;
+    case 'Wrench':
     default:
       return <Wrench className={className} />;
   }
@@ -71,33 +75,90 @@ const renderServiceIcon = (iconName: string, className = 'w-5 h-5') => {
 export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
   currentUser,
   currentStore,
+  companySettings,
   initialBrand,
   onQuoteGenerated,
   onCancel,
 }) => {
-  // Search query
+  // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBrand, setSelectedBrand] = useState<BrandName | 'Todas'>(initialBrand || 'Todas');
 
-  // Selections
+  // STEP 1: Model Selection
   const [selectedModel, setSelectedModel] = useState<PhoneModel | null>(null);
+
+  // STEP 2: Service Selection
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
-  const [selectedQuality, setSelectedQuality] = useState<QualityOption>(QUALITY_OPTIONS[1]); // Premium OLED default
+
+  // Dynamic active options from company settings
+  const activeQualities = useMemo(() => {
+    const list = companySettings.qualities.filter((q) => q.active);
+    return list.length > 0 ? list : companySettings.qualities;
+  }, [companySettings.qualities]);
+
+  const activeWarranties = useMemo(() => {
+    const list = companySettings.warranties.filter((w) => w.active);
+    return list.length > 0 ? list : companySettings.warranties;
+  }, [companySettings.warranties]);
+
+  const activeServiceTypes = useMemo(() => {
+    const list = companySettings.serviceTypes.filter((s) => s.active);
+    return list.length > 0 ? list : companySettings.serviceTypes;
+  }, [companySettings.serviceTypes]);
+
+  const activeTechnicians = useMemo(() => {
+    const list = companySettings.technicians.filter((t) => t.active);
+    return list.length > 0 ? list : companySettings.technicians;
+  }, [companySettings.technicians]);
+
+  // STEP 3: Quality Selection
+  const [selectedQuality, setSelectedQuality] = useState<PartQualityConfig>(() => {
+    return activeQualities[0];
+  });
+
+  // STEP 4: Warranty Selection (allows quick select pill + custom text input)
+  const defaultWarrantyLabel = useMemo(() => {
+    const def = activeWarranties.find((w) => w.isDefault);
+    return def ? def.label : (activeWarranties[0]?.label || '90 dias');
+  }, [activeWarranties]);
+
+  const [selectedWarranty, setSelectedWarranty] = useState<string>(defaultWarrantyLabel);
+  const [isCustomWarrantyMode, setIsCustomWarrantyMode] = useState(false);
+
+  // STEP 5: Service Type (Tipo de atendimento)
+  const [selectedServiceType, setSelectedServiceType] = useState<ServiceTypeConfig>(() => {
+    return activeServiceTypes[0];
+  });
+
+  // STEP 6: Technician (Técnico responsável)
+  const [selectedTechnician, setSelectedTechnician] = useState<TechnicianConfig>(() => {
+    const matchUser = activeTechnicians.find((t) => t.name === currentUser?.name);
+    const matchStore = activeTechnicians.find((t) => t.storeId === currentStore.id);
+    return matchUser || matchStore || activeTechnicians[0];
+  });
+
+  // Additional options
   const [customDeliveryTime, setCustomDeliveryTime] = useState('Pronto em 40 minutos');
-  const [customWarranty, setCustomWarranty] = useState(QUALITY_OPTIONS[1].warrantyDefault);
   const [customDiscount, setCustomDiscount] = useState<number>(0);
 
-  // Client info (optional for instant flow, essential for WhatsApp personalization)
+  // Client info (optional for instant quote, used for WhatsApp personalization)
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
 
-  // Update warranty when quality changes
-  const handleQualityChange = (opt: QualityOption) => {
-    setSelectedQuality(opt);
-    setCustomWarranty(opt.warrantyDefault);
-  };
+  // Keep state synced if companySettings change
+  useEffect(() => {
+    if (!activeQualities.some((q) => q.id === selectedQuality.id) && activeQualities[0]) {
+      setSelectedQuality(activeQualities[0]);
+    }
+    if (!activeServiceTypes.some((s) => s.id === selectedServiceType.id) && activeServiceTypes[0]) {
+      setSelectedServiceType(activeServiceTypes[0]);
+    }
+    if (!activeTechnicians.some((t) => t.id === selectedTechnician.id) && activeTechnicians[0]) {
+      setSelectedTechnician(activeTechnicians[0]);
+    }
+  }, [activeQualities, activeServiceTypes, activeTechnicians]);
 
-  // Preset example search clicks (requirement 4 examples)
+  // Quick search examples (requirement 4)
   const quickSearchExamples = [
     { label: 'iPhone 13', query: 'iPhone 13' },
     { label: 'A54', query: 'A54' },
@@ -130,13 +191,25 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     } else if (raw.includes('camera') || raw.includes('câmera') || raw.includes('foto')) {
       detectedServiceId = 'srv-camera';
       modelKeywords = raw.replace(/camera|câmera|foto/g, '').trim();
-    } else if (raw.includes('som') || raw.includes('alto-falante') || raw.includes('audio') || raw.includes('áudio') || raw.includes('auricular')) {
+    } else if (
+      raw.includes('som') ||
+      raw.includes('alto-falante') ||
+      raw.includes('audio') ||
+      raw.includes('áudio') ||
+      raw.includes('auricular')
+    ) {
       detectedServiceId = 'srv-altofalante';
       modelKeywords = raw.replace(/alto-falante|auricular|som|audio|áudio/g, '').trim();
     } else if (raw.includes('tampa') || raw.includes('traseira') || raw.includes('traseiro')) {
       detectedServiceId = 'srv-tampa';
       modelKeywords = raw.replace(/tampa|traseira|traseiro/g, '').trim();
-    } else if (raw.includes('desoxidacao') || raw.includes('desoxidação') || raw.includes('agua') || raw.includes('água') || raw.includes('banho')) {
+    } else if (
+      raw.includes('desoxidacao') ||
+      raw.includes('desoxidação') ||
+      raw.includes('agua') ||
+      raw.includes('água') ||
+      raw.includes('banho')
+    ) {
       detectedServiceId = 'srv-desoxidacao';
       modelKeywords = raw.replace(/desoxidacao|desoxidação|agua|água|banho/g, '').trim();
     }
@@ -148,7 +221,7 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     };
   }, [searchQuery]);
 
-  // When query matches a service keyword and matches exactly 1 model or a selected model, auto-preselect that service!
+  // When query matches a service keyword, preselect that service
   useEffect(() => {
     if (parsedSearch.detectedServiceId) {
       const srv = SERVICES.find((s) => s.id === parsedSearch.detectedServiceId);
@@ -163,51 +236,63 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     const term = parsedSearch.modelKeywords.toLowerCase();
 
     return PHONE_MODELS.filter((model) => {
-      // Brand filter
       if (selectedBrand !== 'Todas' && model.brand !== selectedBrand) {
         return false;
       }
       if (!term) return true;
 
       const fullString = `${model.brand} ${model.name} ${model.id}`.toLowerCase();
-      // Also match abbreviations like "a54" for "Galaxy A54 5G"
       const normalizedName = model.name.toLowerCase().replace(/galaxy\s*/g, '');
 
       return fullString.includes(term) || normalizedName.includes(term);
     });
   }, [selectedBrand, parsedSearch.modelKeywords]);
 
-  // Auto-select model if single match or exact hit
   const handleSelectModel = (model: PhoneModel) => {
     setSelectedModel(model);
-    // If a service was already detected from search, keep it, otherwise prompt user to select service
   };
 
-  // Reset to change device
   const handleResetDevice = () => {
     setSelectedModel(null);
     setSelectedService(null);
   };
 
-  // Calculated Pricing
+  // Pricing calculation adhering to: Base Service Price * Model Tier Factor * Quality Multiplier + Service Type Fee - Discount
   const priceData = useMemo(() => {
     if (!selectedModel || !selectedService) {
-      return { cash: 0, installments: 0, installmentsCount: 3, installmentValue: 0 };
+      return { cash: 0, installments: 0, installmentsCount: 3, installmentValue: 0, additionalFee: 0 };
     }
-    const base = calculateServicePrice(selectedModel, selectedService, selectedQuality);
-    const finalCash = Math.max(10, base.cash - customDiscount);
-    const finalInstallments = Math.max(10, base.installments - customDiscount);
-    const installmentValue = Number((finalInstallments / base.installmentsCount).toFixed(2));
+
+    // Model tier factor
+    let modelFactor = 1.0;
+    if (selectedModel.category === 'Premium') {
+      modelFactor = selectedModel.brand === 'Apple' ? 1.65 : 1.45;
+    } else if (selectedModel.category === 'Intermediário') {
+      modelFactor = 1.0;
+    } else {
+      modelFactor = 0.85;
+    }
+
+    const qualityMultiplier = selectedQuality?.priceMultiplier || 1.0;
+    const additionalFee = selectedServiceType?.extraFee || 0;
+
+    const baseCost = selectedService.basePrice * modelFactor * qualityMultiplier;
+    const finalCash = Math.max(10, Math.round(baseCost + additionalFee - customDiscount));
+    // Card installments price has standard credit gateway margin (~9%)
+    const finalInstallments = Math.max(10, Math.round(finalCash * 1.09));
+    const installmentsCount = 3;
+    const installmentValue = Number((finalInstallments / installmentsCount).toFixed(2));
 
     return {
       cash: finalCash,
       installments: finalInstallments,
-      installmentsCount: base.installmentsCount,
+      installmentsCount,
       installmentValue,
+      additionalFee,
     };
-  }, [selectedModel, selectedService, selectedQuality, customDiscount]);
+  }, [selectedModel, selectedService, selectedQuality, selectedServiceType, customDiscount]);
 
-  // Handle format phone Brazilian (XX) XXXXX-XXXX
+  // Format phone Brazilian (XX) XXXXX-XXXX
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(/\D/g, '');
     if (val.length > 11) val = val.slice(0, 11);
@@ -221,12 +306,14 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
     }
   };
 
-  // Requirement 8: "Criar um botão grande: 'GERAR ORÇAMENTO'"
+  // Generate Quote Handler
   const handleGenerateQuote = () => {
     if (!selectedModel || !selectedService) return;
 
     const randomNum = Math.floor(100 + Math.random() * 900);
-    const dateStr = 'Hoje, ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const dateStr =
+      'Hoje, ' +
+      new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     const newQuote: Quote = {
       id: `q-${Date.now()}`,
@@ -239,67 +326,77 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
       deviceBrand: selectedModel.brand,
       serviceId: selectedService.id,
       serviceName: selectedService.name,
-      qualityTier: selectedQuality.id,
-      qualityLabel: selectedQuality.label,
+      qualityTier: selectedQuality?.id || 'default',
+      qualityLabel: selectedQuality?.label || 'Padrão',
       deliveryTime: customDeliveryTime,
-      warranty: customWarranty,
+      warranty: selectedWarranty,
+      serviceTypeName: selectedServiceType?.name || 'Atendimento na Loja',
+      serviceTypeId: selectedServiceType?.id,
+      technicianId: selectedTechnician?.id,
+      technicianName: selectedTechnician?.name || currentUser?.name || 'Técnico',
+      storeName: currentStore.name,
       cashPrice: priceData.cash,
       installmentsPrice: priceData.installments,
       installmentsCount: priceData.installmentsCount,
       status: 'Pendente',
-      technicianName: currentUser?.name || 'Técnico',
-      storeName: currentStore.name,
+      companyId: companySettings.companyId,
     };
 
     onQuoteGenerated(newQuote);
   };
 
   return (
-    <div className="space-y-4 max-w-4xl mx-auto pb-24 sm:pb-12">
-      {/* Top Navigation Bar in New Quote */}
+    <div className="space-y-4 max-w-5xl mx-auto pb-24 sm:pb-12">
+      {/* Top Header Bar */}
       <div className="flex items-center justify-between gap-2 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onCancel}
-            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer"
-            title="Voltar"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <Sparkles className="w-5 h-5" />
+          </div>
           <div>
-            <h1 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-              <span>Novo Orçamento</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                Passo a Passo Rápido
-              </span>
+            <h1 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight leading-tight">
+              Novo Orçamento Rápido
             </h1>
-            <p className="text-xs text-slate-500">
-              Pesquise o aparelho e selecione o serviço para cotar
+            <p className="text-[11px] text-slate-500">
+              Fluxo: Aparelho → Serviço → Qualidade → Garantia → Atendimento → Técnico → Preço
             </p>
           </div>
         </div>
 
-        {selectedModel && (
+        <div className="flex items-center gap-2">
+          {selectedModel && (
+            <button
+              onClick={handleResetDevice}
+              className="px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Recomeçar</span>
+            </button>
+          )}
           <button
-            onClick={handleResetDevice}
-            className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
-            <span>Trocar Aparelho</span>
+            Voltar
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Main 12-column layout matching Clean Minimalism */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-        {/* Left Column (7 cols): Search, Device, Service Selection, and Quality */}
-        <div className="lg:col-span-7 flex flex-col gap-6">
-          {/* 1. Pesquisar Aparelho ou Serviço */}
-          <div className="space-y-3">
+      {/* Main Grid: Left Flow (Steps) + Right Summary Card */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column (7 cols): The Exact Requested Step Sequence */}
+        <div className="lg:col-span-7 space-y-5">
+          {/* STEP 1: PESQUISAR E SELECIONAR APARELHO */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                1. Pesquisar Aparelho ou Serviço
-              </label>
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  1
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Modelo do Aparelho
+                </label>
+              </div>
               {selectedModel && (
                 <button
                   onClick={handleResetDevice}
@@ -310,214 +407,261 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
               )}
             </div>
 
-            {/* Search Input Bar */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                <Search className="w-5 h-5" />
+            {/* If model not yet selected, show search bar, pills and results */}
+            {!selectedModel ? (
+              <div className="space-y-3">
+                {/* Search input */}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <input
+                    id="device-search-input"
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Pesquise por marca, modelo ou serviço (ex: iPhone 13 tela, A54...)"
+                    className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all shadow-2xs"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Example pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-medium text-slate-400">Exemplos:</span>
+                  {quickSearchExamples.map((ex) => (
+                    <button
+                      key={ex.label}
+                      id={`quick-example-${ex.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      type="button"
+                      onClick={() => setSearchQuery(ex.query)}
+                      className="px-2 py-0.5 text-[11px] font-medium rounded-md bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-600 border border-slate-200/60 transition-colors cursor-pointer"
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Brand pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                  <button
+                    onClick={() => setSelectedBrand('Todas')}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer ${
+                      selectedBrand === 'Todas'
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {BRANDS.map((b) => (
+                    <button
+                      key={b.name}
+                      id={`brand-filter-${b.name.toLowerCase()}`}
+                      onClick={() => setSelectedBrand(b.name)}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer flex items-center gap-1 ${
+                        selectedBrand === b.name
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span>{b.icon}</span>
+                      <span>{b.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search Feedback: Detected Service */}
+                {parsedSearch.detectedServiceId && (
+                  <div className="p-2.5 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-800 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      Serviço detectado: <strong>{SERVICES.find((s) => s.id === parsedSearch.detectedServiceId)?.name}</strong>
+                    </span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                      Identificado
+                    </span>
+                  </div>
+                )}
+
+                {/* Models grid */}
+                <div className="space-y-1.5 pt-1">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Aparelhos encontrados ({filteredModels.length})
+                  </span>
+                  {filteredModels.length === 0 ? (
+                    <div className="p-6 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                      <Smartphone className="w-6 h-6 text-slate-400 mx-auto mb-1" />
+                      <p className="text-xs font-semibold text-slate-600">Nenhum aparelho encontrado</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Tente buscar por "13", "A54" ou "G54"</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[260px] overflow-y-auto pr-1">
+                      {filteredModels.map((model) => (
+                        <button
+                          key={model.id}
+                          id={`model-card-${model.id}`}
+                          onClick={() => handleSelectModel(model)}
+                          className="p-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/40 text-left transition-all group flex items-center justify-between cursor-pointer shadow-2xs"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                              <Smartphone className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-slate-900 group-hover:text-blue-700 block">
+                                {model.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {model.brand} • {model.category}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <input
-                id="device-search-input"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ex: iPhone 13 tela, A54 bateria, Moto G54..."
-                className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-xs text-sm font-medium text-slate-900 placeholder-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* Quick Search Suggestions */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
-              <span className="text-[11px] font-semibold text-slate-400">Exemplos:</span>
-              {quickSearchExamples.map((ex) => (
-                <button
-                  key={ex.label}
-                  id={`quick-example-${ex.label.toLowerCase().replace(/\s+/g, '-')}`}
-                  type="button"
-                  onClick={() => setSearchQuery(ex.query)}
-                  className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white hover:bg-blue-50 hover:text-blue-600 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
-                >
-                  {ex.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Brand Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar pt-1">
-              <button
-                onClick={() => setSelectedBrand('Todas')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer ${
-                  selectedBrand === 'Todas'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                Todas as Marcas
-              </button>
-              {BRANDS.map((b) => (
-                <button
-                  key={b.name}
-                  id={`brand-filter-${b.name.toLowerCase()}`}
-                  onClick={() => setSelectedBrand(b.name)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
-                    selectedBrand === b.name
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <span>{b.icon}</span>
-                  <span>{b.name}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Search Feedback: Detected Service */}
-            {parsedSearch.detectedServiceId && (
-              <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-800 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                  Serviço identificado: <strong>{SERVICES.find((s) => s.id === parsedSearch.detectedServiceId)?.name}</strong>
-                </span>
-                <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">
-                  Auto-selecionado
+            ) : (
+              /* Selected Device Preview Card */
+              <div className="p-3.5 bg-blue-50/50 border border-blue-200 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">{selectedModel.name}</h3>
+                    <p className="text-xs text-slate-500">
+                      {selectedModel.brand} • Categoria {selectedModel.category}
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full border border-emerald-200">
+                  Selecionado
                 </span>
               </div>
             )}
           </div>
 
-          {/* Device Selection State */}
-          {selectedModel ? (
-            /* Selected device card matching Clean Minimalism */
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-700">Resultado encontrado</span>
-                <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full border border-emerald-200">
-                  ESTOQUE OK
-                </span>
-              </div>
-              <div className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-slate-50 rounded-lg flex items-center justify-center text-slate-400">
-                    <Smartphone className="w-7 h-7 text-slate-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-900">{selectedModel.name}</h3>
-                    <p className="text-sm text-slate-500">
-                      {selectedModel.brand} • {selectedModel.category}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleResetDevice}
-                  className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer"
-                >
-                  Alterar
-                </button>
-              </div>
+          {/* STEP 2: ESCOLHER SERVIÇO */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                2
+              </span>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Serviço Solicitado
+              </label>
             </div>
-          ) : (
-            /* Found models list */
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                  Modelos Compatíveis ({filteredModels.length})
-                </span>
-                <span className="text-[11px] text-slate-400">Clique para selecionar</span>
-              </div>
 
-              {filteredModels.length === 0 ? (
-                <div className="text-center py-8 bg-white rounded-xl border border-dashed border-slate-200">
-                  <Smartphone className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-slate-700">Nenhum aparelho encontrado</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Tente pesquisar apenas "13", "A54" ou "G54"
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
-                  {filteredModels.map((model) => (
-                    <button
-                      key={model.id}
-                      id={`model-card-${model.id}`}
-                      onClick={() => handleSelectModel(model)}
-                      className="p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-left transition-all group flex items-center justify-between cursor-pointer shadow-2xs"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center text-slate-500 font-bold group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                          <Smartphone className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 block">
-                            {model.name}
-                          </span>
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            {model.brand}
-                          </span>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-transform shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 2. Escolher Serviço */}
-          <div className="space-y-3 pt-2">
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-              2. Escolher Serviço {selectedModel && `para ${selectedModel.name}`}
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {SERVICES.map((srv) => {
                 const isSelected = selectedService?.id === srv.id;
-                const estimatedPrice = calculateServicePrice(
-                  selectedModel || PHONE_MODELS[0],
-                  srv,
-                  QUALITY_OPTIONS[1]
-                );
-
                 return (
                   <button
                     key={srv.id}
                     id={`service-card-${srv.id}`}
+                    type="button"
                     onClick={() => setSelectedService(srv)}
-                    className={`p-3.5 text-left rounded-xl transition-all relative cursor-pointer flex flex-col justify-between ${
+                    className={`p-3 rounded-xl text-left transition-all relative cursor-pointer flex items-center justify-between border ${
                       isSelected
-                        ? 'border-2 border-blue-600 bg-blue-50 shadow-xs'
-                        : 'border border-slate-200 bg-white hover:border-slate-300'
+                        ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`p-1.5 rounded-lg ${
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`p-2 rounded-lg transition-colors ${
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {renderServiceIcon(srv.iconName, 'w-4 h-4')}
+                      </div>
+                      <div>
+                        <span className="block text-xs sm:text-sm font-bold text-slate-900">
+                          {srv.name}
+                        </span>
+                        <span className="block text-[10px] text-slate-500">
+                          Base: R$ {srv.basePrice.toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 text-white stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* STEP 3: QUALIDADE DA PEÇA (Loaded dynamically from Company Settings) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  3
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Qualidade da Peça
+                </label>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">
+                Configurada pela empresa
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {activeQualities.map((qual) => {
+                const isSelected = selectedQuality?.id === qual.id;
+                return (
+                  <button
+                    key={qual.id}
+                    id={`quality-opt-${qual.id}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedQuality(qual);
+                      if (qual.warrantyDefault && !isCustomWarrantyMode) {
+                        setSelectedWarranty(qual.warrantyDefault);
+                      }
+                    }}
+                    className={`p-3 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between border ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-xs font-bold text-slate-900">{qual.label}</span>
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
                             isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {renderServiceIcon(srv.iconName, 'w-4 h-4')}
-                        </div>
-                        <div>
-                          <span className="block text-sm font-bold text-slate-900">
-                            {srv.name}
-                          </span>
-                          <span className="block text-xs text-slate-500 mt-0.5">
-                            A partir de R$ {estimatedPrice.cash}
-                          </span>
-                        </div>
+                          {qual.badge}
+                        </span>
                       </div>
+                      <p className="text-[10px] text-slate-500 line-clamp-2 leading-tight">
+                        {qual.description}
+                      </p>
+                    </div>
 
+                    <div className="mt-2.5 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400 text-[10px]">Fator {qual.priceMultiplier}x</span>
                       {isSelected && (
-                        <div className="w-4 h-4 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
-                          <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                        </div>
+                        <span className="text-blue-700 font-bold flex items-center gap-0.5 text-[10px]">
+                          <Check className="w-3 h-3" /> Ativa
+                        </span>
                       )}
                     </div>
                   </button>
@@ -526,188 +670,331 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
             </div>
           </div>
 
-          {/* 3. Qualidade da Peça & Configurações */}
-          {selectedService && (
-            <div className="space-y-4 pt-2">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                3. Qualidade da Peça & Detalhes
-              </label>
-
-              {/* Quality options grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {QUALITY_OPTIONS.map((opt) => {
-                  const isChosen = selectedQuality.id === opt.id;
-                  const optPrice = calculateServicePrice(
-                    selectedModel || PHONE_MODELS[0],
-                    selectedService,
-                    opt
-                  );
-
-                  return (
-                    <button
-                      key={opt.id}
-                      id={`quality-opt-${opt.id}`}
-                      type="button"
-                      onClick={() => handleQualityChange(opt)}
-                      className={`p-3 rounded-xl text-left transition-all cursor-pointer flex flex-col justify-between ${
-                        isChosen
-                          ? 'border-2 border-blue-600 bg-blue-50 shadow-xs'
-                          : 'border border-slate-200 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-bold text-slate-900">{opt.label}</span>
-                          <span
-                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              isChosen ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {opt.badge}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-2">{opt.description}</p>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
-                          <Shield className="w-3 h-3" /> {opt.warrantyDefault}
-                        </span>
-                        <span className="font-bold text-slate-900">R$ {optPrice.cash}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+          {/* STEP 4: GARANTIA (Loaded dynamically from Company Settings + Custom typing) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  4
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Garantia do Serviço
+                </label>
               </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomWarrantyMode(!isCustomWarrantyMode)}
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+              >
+                {isCustomWarrantyMode ? 'Voltar para opções padrão' : 'Digitar garantia personalizada'}
+              </button>
+            </div>
 
-              {/* Prazo e Garantia */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-                    <Clock className="w-3 h-3 text-slate-400" />
-                    Prazo de Execução
-                  </label>
-                  <select
-                    id="quote-delivery-time-select"
-                    value={customDeliveryTime}
-                    onChange={(e) => setCustomDeliveryTime(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
+            {/* Quick-select warranty pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {activeWarranties.map((warr) => {
+                const isSelected = selectedWarranty === warr.label && !isCustomWarrantyMode;
+                return (
+                  <button
+                    key={warr.id}
+                    id={`warranty-pill-${warr.id}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedWarranty(warr.label);
+                      setIsCustomWarrantyMode(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
                   >
-                    <option value="Pronto em 30 minutos">Pronto em 30 minutos (Express)</option>
-                    <option value="Pronto em 40 minutos">Pronto em 40 minutos</option>
-                    <option value="Pronto em 1 hora">Pronto em 1 hora</option>
-                    <option value="Pronto em 2 horas">Pronto em 2 horas</option>
-                    <option value="Mesmo dia (Até as 18h)">Mesmo dia (Até as 18h)</option>
-                    <option value="De 24h a 48h (Sob encomenda)">De 24h a 48h (Sob encomenda)</option>
-                  </select>
-                </div>
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>{warr.label}</span>
+                    {warr.isDefault && (
+                      <span className="text-[9px] opacity-80">(Padrão)</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-                    <Shield className="w-3 h-3 text-slate-400" />
-                    Garantia
-                  </label>
-                  <select
-                    id="quote-warranty-select"
-                    value={customWarranty}
-                    onChange={(e) => setCustomWarranty(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
-                  >
-                    <option value="90 dias de garantia legal">90 dias de garantia legal</option>
-                    <option value="6 meses de garantia estendida">6 meses de garantia estendida</option>
-                    <option value="1 ano de garantia total">1 ano de garantia total</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Dados do Cliente (Opcional) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-                    <User className="w-3 h-3 text-slate-400" />
-                    Nome do Cliente (opcional)
-                  </label>
+            {/* Custom warranty text input (explicitly requested) */}
+            {isCustomWarrantyMode && (
+              <div className="pt-1">
+                <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                  Digite a garantia personalizada para este orçamento:
+                </label>
+                <div className="relative">
+                  <Shield className="w-4 h-4 text-blue-600 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
-                    id="client-name-input"
+                    id="custom-warranty-input"
                     type="text"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="Ex: Mariana Silveira"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
+                    value={selectedWarranty}
+                    onChange={(e) => setSelectedWarranty(e.target.value)}
+                    placeholder="Ex: 90 dias com cobertura especial de tela quebrada"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                    autoFocus
                   />
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-slate-400" />
-                    WhatsApp do Cliente (opcional)
-                  </label>
-                  <input
-                    id="client-phone-input"
-                    type="tel"
-                    value={clientPhone}
-                    onChange={handlePhoneChange}
-                    placeholder="(11) 98765-4321"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
+              </div>
+            )}
+          </div>
+
+          {/* STEP 5: TIPO DE ATENDIMENTO (Loaded dynamically from Company Settings) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  5
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Tipo de Atendimento
+                </label>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">Modalidade</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {activeServiceTypes.map((stype) => {
+                const isSelected = selectedServiceType?.id === stype.id;
+                return (
+                  <button
+                    key={stype.id}
+                    id={`service-type-${stype.id}`}
+                    type="button"
+                    onClick={() => setSelectedServiceType(stype)}
+                    className={`p-3 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between border ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`p-2 rounded-lg ${
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">{stype.name}</span>
+                        <span className="text-[10px] text-slate-500">
+                          {stype.extraFee && stype.extraFee > 0
+                            ? `+ R$ ${stype.extraFee.toFixed(2).replace('.', ',')} taxa`
+                            : 'Sem taxa adicional'}
+                          {stype.estimatedExtraTime ? ` • ${stype.estimatedExtraTime}` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 text-white stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* STEP 6: TÉCNICO RESPONSÁVEL (Loaded dynamically from Company Settings) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  6
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Técnico Responsável
+                </label>
+              </div>
+              <span className="text-[10px] text-slate-400 font-medium">Equipe Técnica</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {activeTechnicians.map((tech) => {
+                const isSelected = selectedTechnician?.id === tech.id;
+                return (
+                  <button
+                    key={tech.id}
+                    id={`tech-select-${tech.id}`}
+                    type="button"
+                    onClick={() => setSelectedTechnician(tech)}
+                    className={`p-3 rounded-xl text-left transition-all cursor-pointer flex items-center justify-between border ${
+                      isSelected
+                        ? 'border-blue-600 bg-blue-50/80 shadow-xs ring-1 ring-blue-500/30'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {tech.name.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">{tech.name}</span>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          {tech.storeName || 'Loja Matriz'}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                        <Check className="w-3 h-3 text-white stroke-[3]" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* STEP 7: DADOS DO CLIENTE & PRAZO (Opcional) */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-black flex items-center justify-center">
+                  7
+                </span>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Dados do Cliente & Prazo (Opcional)
+                </label>
               </div>
             </div>
-          )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
+                  <User className="w-3 h-3 text-slate-400" />
+                  Nome do Cliente
+                </label>
+                <input
+                  id="client-name-input"
+                  type="text"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="Ex: Mariana Silveira"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
+                  <Phone className="w-3 h-3 text-slate-400" />
+                  WhatsApp
+                </label>
+                <input
+                  id="client-phone-input"
+                  type="tel"
+                  value={clientPhone}
+                  onChange={handlePhoneChange}
+                  placeholder="(11) 98765-4321"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  Prazo de Execução
+                </label>
+                <select
+                  id="quote-delivery-time-select"
+                  value={customDeliveryTime}
+                  onChange={(e) => setCustomDeliveryTime(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-600 cursor-pointer"
+                >
+                  <option value="Pronto em 30 minutos">Pronto em 30 minutos (Express)</option>
+                  <option value="Pronto em 40 minutos">Pronto em 40 minutos</option>
+                  <option value="Pronto em 1 hora">Pronto em 1 hora</option>
+                  <option value="Pronto em 2 horas">Pronto em 2 horas</option>
+                  <option value="Mesmo dia (Até as 18h)">Mesmo dia (Até as 18h)</option>
+                  <option value="De 24h a 48h (Sob encomenda)">De 24h a 48h (Sob encomenda)</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Right Column (5 cols): Dark Summary Card & Message Preview (matching Design HTML) */}
-        <div className="lg:col-span-5 flex flex-col gap-6 lg:sticky lg:top-4 h-fit">
+        {/* Right Column (5 cols): Summary Card & Direct WhatsApp Button */}
+        <div className="lg:col-span-5 flex flex-col gap-5 lg:sticky lg:top-4 h-fit">
           {/* Dark Summary Card */}
           <div className="bg-slate-900 text-white rounded-2xl p-6 shadow-xl flex flex-col">
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-start mb-5">
               <div>
                 <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">
                   Orçamento Instantâneo
                 </p>
-                <h2 className="text-xl font-bold text-white tracking-tight">Resumo Final</h2>
+                <h2 className="text-xl font-bold text-white tracking-tight">Resumo do Pedido</h2>
               </div>
-              <div className="bg-white/10 px-3 py-1 rounded-md text-xs text-slate-300 font-medium">
-                Preview
+              <div className="bg-white/10 px-2.5 py-0.5 rounded text-[11px] text-slate-300 font-medium">
+                Passo a Passo
               </div>
             </div>
 
-            <div className="space-y-3.5 flex-1">
-              <div className="flex justify-between border-b border-white/10 pb-3">
-                <span className="text-sm text-slate-400">Aparelho</span>
-                <span className="text-sm font-medium text-white truncate max-w-[180px] text-right">
-                  {selectedModel ? selectedModel.name : 'Selecione o modelo'}
+            <div className="space-y-3 flex-1 text-xs">
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">1. Aparelho</span>
+                <span className="font-semibold text-white truncate max-w-[190px] text-right">
+                  {selectedModel ? selectedModel.name : 'Pendente seleção'}
                 </span>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-3">
-                <span className="text-sm text-slate-400">Serviço</span>
-                <span className="text-sm font-medium text-white truncate max-w-[180px] text-right">
-                  {selectedService ? selectedService.name : 'Selecione o serviço'}
-                </span>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-3">
-                <span className="text-sm text-slate-400">Qualidade</span>
-                <span className="text-sm font-medium text-white">{selectedQuality.label}</span>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-3">
-                <span className="text-sm text-slate-400">Prazo</span>
-                <span className="text-sm font-medium text-white">{customDeliveryTime}</span>
-              </div>
-              <div className="flex justify-between border-b border-white/10 pb-3">
-                <span className="text-sm text-slate-400">Garantia</span>
-                <span className="text-sm font-medium text-white">{customWarranty}</span>
               </div>
 
-              {/* Total Price */}
-              <div className="flex justify-between items-center pt-3">
-                <div>
-                  <span className="text-sm text-slate-400 block">Total à vista</span>
-                  <span className="text-[11px] text-slate-400">
-                    Ou {priceData.installmentsCount}x de R$ {priceData.installmentValue.toFixed(2).replace('.', ',')}
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">2. Serviço</span>
+                <span className="font-semibold text-white truncate max-w-[190px] text-right">
+                  {selectedService ? selectedService.name : 'Pendente seleção'}
+                </span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">3. Qualidade</span>
+                <span className="font-semibold text-white">
+                  {selectedQuality ? selectedQuality.label : 'Padrão'}
+                </span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">4. Garantia</span>
+                <span className="font-semibold text-white truncate max-w-[190px] text-right">
+                  {selectedWarranty}
+                </span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">5. Atendimento</span>
+                <span className="font-semibold text-white truncate max-w-[190px] text-right">
+                  {selectedServiceType?.name || 'Na Loja'}
+                </span>
+              </div>
+
+              <div className="flex justify-between border-b border-white/10 pb-2.5">
+                <span className="text-slate-400">6. Técnico</span>
+                <span className="font-semibold text-white truncate max-w-[190px] text-right">
+                  {selectedTechnician?.name || 'Equipe Técnica'}
+                </span>
+              </div>
+
+              {/* Total Price breakdown */}
+              <div className="pt-3">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <span className="text-xs text-slate-400 block font-medium">Total à vista (Pix/Dinheiro)</span>
+                    <span className="text-[11px] text-slate-400">
+                      Ou {priceData.installmentsCount}x de R${' '}
+                      {priceData.installmentValue.toFixed(2).replace('.', ',')} no cartão
+                    </span>
+                  </div>
+                  <span className="text-2xl sm:text-3xl font-black text-blue-400">
+                    R$ {priceData.cash.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
-                <span className="text-3xl font-bold text-blue-400">
-                  R$ {priceData.cash.toFixed(2).replace('.', ',')}
-                </span>
               </div>
             </div>
 
@@ -717,34 +1004,48 @@ export const NewQuoteView: React.FC<NewQuoteViewProps> = ({
               type="button"
               disabled={!selectedModel || !selectedService}
               onClick={handleGenerateQuote}
-              className={`w-full font-bold py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all flex items-center justify-center gap-2 mt-6 uppercase tracking-wider text-sm cursor-pointer ${
+              className={`w-full font-bold py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-5 uppercase tracking-wider text-xs sm:text-sm cursor-pointer ${
                 selectedModel && selectedService
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.99]'
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white active:scale-[0.99] shadow-blue-900/40'
                   : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}
             >
-              <Check className="w-5 h-5 stroke-[2.5]" />
-              <span>Gerar Orçamento</span>
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>GERAR ORÇAMENTO</span>
             </button>
           </div>
 
-          {/* Preview da Mensagem (Design HTML matching) */}
-          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
-            <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mb-2">
-              Preview da Mensagem
+          {/* Preview WhatsApp Card */}
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                Mensagem Formatada para WhatsApp
+              </span>
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                1 Clique
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 italic bg-white p-3 rounded-xl border border-emerald-100 leading-relaxed">
+              "Olá{clientName ? ` *${clientName}*` : ''}! O orçamento para o seu{' '}
+              <strong>{selectedModel?.name || 'aparelho'}</strong> (
+              {selectedService?.name || 'serviço'} {selectedQuality?.label}) na modalidade{' '}
+              <strong>{selectedServiceType?.name}</strong> ficou em{' '}
+              <strong>R$ {priceData.cash.toFixed(2).replace('.', ',')}</strong> à vista com garantia de{' '}
+              <strong>{selectedWarranty}</strong> com o técnico{' '}
+              <strong>{selectedTechnician?.name}</strong>. Deseja aprovar agora?"
             </p>
-            <p className="text-xs text-slate-600 italic leading-relaxed">
-              "{`Olá! O orçamento para seu ${selectedModel?.name || 'aparelho'} (${selectedService?.name || 'serviço'} ${selectedQuality.label}) ficou em R$ ${priceData.cash.toFixed(2).replace('.', ',')}. ${customDeliveryTime} com ${customWarranty}. Podemos iniciar?`}"
-            </p>
+
             <button
               id="btn-quick-send-whatsapp-preview"
               type="button"
               onClick={handleGenerateQuote}
               disabled={!selectedModel || !selectedService}
-              className="w-full mt-4 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Phone className="w-4 h-4 fill-white" />
-              <span>Enviar pelo WhatsApp</span>
+              <MessageCircle className="w-4 h-4 fill-white" />
+              <span>ENVIAR PELO WHATSAPP</span>
             </button>
           </div>
         </div>

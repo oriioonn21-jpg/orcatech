@@ -37,7 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'admin' as NavTab,
-      label: 'Administração',
+      label: 'Configurações',
       icon: Settings,
     },
   ];

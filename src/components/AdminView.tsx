@@ -18,28 +18,74 @@ import {
   Sparkles,
   ChevronRight,
   Info,
+  Sliders,
+  Building2,
+  Lock,
 } from 'lucide-react';
-import { BrandName, PhoneModel, ServiceItem, QualityOption, StaffMember, StoreLocation } from '../types';
-import { BRANDS, PHONE_MODELS, SERVICES, QUALITY_OPTIONS, STAFF_MEMBERS, STORES } from '../data/mockData';
+import {
+  BrandName,
+  PhoneModel,
+  ServiceItem,
+  QualityOption,
+  StaffMember,
+  StoreLocation,
+  Company,
+  CompanyQuoteSettings,
+} from '../types';
+import {
+  BRANDS,
+  PHONE_MODELS,
+  SERVICES,
+  QUALITY_OPTIONS,
+  STAFF_MEMBERS,
+  STORES,
+  COMPANIES,
+} from '../data/mockData';
+import { QuoteSettingsManager } from './QuoteSettingsManager';
 
+interface AdminViewProps {
+  currentUser?: StaffMember | null;
+  currentStore?: StoreLocation;
+  currentCompany?: Company;
+  companySettings?: CompanyQuoteSettings;
+  stores?: StoreLocation[];
+  onUpdateCompanySettings?: (newSettings: CompanyQuoteSettings) => void;
+  onSwitchCompany?: (companyId: string) => void;
+  companies?: Company[];
+}
+
+type AdminSection = 'orcamento' | 'catalogo';
 type AdminTab = 'marcas' | 'modelos' | 'servicos' | 'pecas' | 'precos' | 'funcionarios' | 'lojas';
 
-export const AdminView: React.FC = () => {
+export const AdminView: React.FC<AdminViewProps> = ({
+  currentUser = STAFF_MEMBERS[3], // Carlos Eduardo (Administrador) by default
+  currentStore = STORES[0],
+  currentCompany = COMPANIES[0],
+  companySettings,
+  stores = STORES,
+  onUpdateCompanySettings,
+  onSwitchCompany,
+  companies = COMPANIES,
+}) => {
+  // Main section: 'orcamento' (Configurações de Orçamento) or 'catalogo'
+  const [activeSection, setActiveSection] = useState<AdminSection>('orcamento');
   const [currentTab, setCurrentTab] = useState<AdminTab>('marcas');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Editable state representations for demo
-  const [brands, setBrands] = useState(BRANDS.map(b => ({ ...b, active: true })));
+  // Editable state representations for catalog demo
+  const [brands, setBrands] = useState(BRANDS.map((b) => ({ ...b, active: true })));
   const [models, setModels] = useState<PhoneModel[]>(PHONE_MODELS);
   const [services, setServices] = useState<ServiceItem[]>(SERVICES);
   const [qualities, setQualities] = useState<QualityOption[]>(QUALITY_OPTIONS);
   const [staff, setStaff] = useState<StaffMember[]>(STAFF_MEMBERS);
-  const [stores, setStores] = useState<StoreLocation[]>(STORES);
+  const [storeLocations, setStoreLocations] = useState<StoreLocation[]>(stores);
 
-  // Quick modal simulation state
+  // Quick modal simulation state for catalog
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemExtra, setNewItemExtra] = useState('');
+
+  const isAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Gerente';
 
   const adminTabs = [
     { id: 'marcas' as AdminTab, label: 'Marcas', icon: Tag, count: brands.length },
@@ -48,12 +94,12 @@ export const AdminView: React.FC = () => {
     { id: 'pecas' as AdminTab, label: 'Peças & Linhas', icon: Layers, count: qualities.length },
     { id: 'precos' as AdminTab, label: 'Regras de Preço', icon: DollarSign, count: 'Auto' },
     { id: 'funcionarios' as AdminTab, label: 'Funcionários', icon: Users, count: staff.length },
-    { id: 'lojas' as AdminTab, label: 'Lojas / Filiais', icon: Store, count: stores.length },
+    { id: 'lojas' as AdminTab, label: 'Lojas / Filiais', icon: Store, count: storeLocations.length },
   ];
 
   const handleAddItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newItemName.trim()) return;
+    if (!newItemName.trim() || !isAdmin) return;
 
     if (currentTab === 'marcas') {
       setBrands([...brands, { name: newItemName as BrandName, color: 'from-slate-600 to-slate-800', icon: '📱', active: true }]);
@@ -81,9 +127,10 @@ export const AdminView: React.FC = () => {
         name: newItemName,
         email: newItemExtra || `${newItemName.toLowerCase().replace(/\s+/g, '')}@orcatech.com`,
         role: 'Técnico',
+        companyId: currentCompany.id,
       }]);
     } else if (currentTab === 'lojas') {
-      setStores([...stores, {
+      setStoreLocations([...storeLocations, {
         id: `st-${Date.now()}`,
         name: newItemName,
         address: newItemExtra || 'Endereço da nova filial',
@@ -98,364 +145,323 @@ export const AdminView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto pb-24 sm:pb-12">
-      {/* Admin Header */}
-      <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="space-y-6 max-w-5xl mx-auto pb-24 sm:pb-12">
+      {/* Admin Top Header with Company Switcher & Section Toggles */}
+      <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
               <Settings className="w-5 h-5" />
             </span>
             <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              Área Administrativa (Backoffice)
+              Configurações & Gestão SaaS
             </h1>
           </div>
           <p className="text-xs text-slate-500">
-            Controle de catálogo, precificação, equipe técnica e filiais da rede
+            Personalize parâmetros de orçamentos, catálogo de produtos e dados da empresa
           </p>
         </div>
 
-        <button
-          id="admin-add-new-btn"
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Adicionar {adminTabs.find(t => t.id === currentTab)?.label.slice(0, -1) || 'Item'}</span>
-        </button>
-      </div>
+        {/* Company & Role Switcher for Testing Multi-Tenancy */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {companies.length > 1 && onSwitchCompany && (
+            <div className="flex items-center gap-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span className="text-slate-400 hidden sm:inline">Empresa:</span>
+              <select
+                id="admin-company-switcher-select"
+                value={currentCompany.id}
+                onChange={(e) => onSwitchCompany(e.target.value)}
+                className="bg-transparent font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+              >
+                {companies.map((comp) => (
+                  <option key={comp.id} value={comp.id}>
+                    {comp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-      {/* Notice on future backend readiness */}
-      <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-900 flex items-start gap-2.5">
-        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-        <div>
-          <strong>Módulo SaaS Preparado para Banco de Dados:</strong> Esta interface visual permite a gestão completa dos 7 pilares do sistema (marcas, modelos, serviços, peças, preços, equipe e lojas) e está pronta para sincronização com Firestore / backend em tempo real.
+          {/* User role indicator */}
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-600">
+            <span className="text-slate-400">Logado como:</span>
+            <strong className="text-slate-800">{currentUser?.name}</strong>
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                isAdmin
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {currentUser?.role}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Horizontal Subtabs */}
-      <div className="bg-white p-1.5 rounded-xl border border-slate-200 shadow-xs flex items-center gap-1 overflow-x-auto no-scrollbar">
-        {adminTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = currentTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              id={`admin-subtab-${tab.id}`}
-              onClick={() => {
-                setCurrentTab(tab.id);
-                setSearchTerm('');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{tab.label}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  isActive ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {tab.count}
-              </span>
-            </button>
-          );
-        })}
+      {/* Main Section Navigation: Configurações de Orçamento vs Catálogo Geral */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          id="tab-section-orcamento"
+          onClick={() => setActiveSection('orcamento')}
+          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${
+            activeSection === 'orcamento'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Sliders className="w-4 h-4" />
+          <span>Configurações de Orçamento</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeSection === 'orcamento'
+                ? 'bg-blue-700 text-blue-100'
+                : 'bg-blue-50 text-blue-700'
+            }`}
+          >
+            Personalização
+          </span>
+        </button>
+
+        <button
+          id="tab-section-catalogo"
+          onClick={() => setActiveSection('catalogo')}
+          className={`px-4 py-2 text-xs sm:text-sm font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-2 ${
+            activeSection === 'catalogo'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Store className="w-4 h-4" />
+          <span>Catálogo & Filiais</span>
+        </button>
       </div>
 
-      {/* Subtab Content Area */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 sm:p-5">
-        {/* TAB 1: MARCAS */}
-        {currentTab === 'marcas' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Marcas Homologadas ({brands.length})</h3>
-              <span className="text-xs text-slate-400">Ative ou desative marcas no catálogo</span>
-            </div>
+      {/* SECTION 1: CONFIGURAÇÕES DE ORÇAMENTO (Garantias, Qualidades, Atendimentos, Técnicos) */}
+      {activeSection === 'orcamento' && companySettings && onUpdateCompanySettings && (
+        <QuoteSettingsManager
+          settings={companySettings}
+          company={currentCompany}
+          currentUser={currentUser}
+          stores={storeLocations}
+          onUpdateSettings={onUpdateCompanySettings}
+        />
+      )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {brands.map((b, idx) => {
-                const modelCount = models.filter((m) => m.brand === b.name).length;
+      {/* SECTION 2: CATÁLOGO GERAL & FILIAIS */}
+      {activeSection === 'catalogo' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 max-w-full">
+              {adminTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = currentTab === tab.id;
                 return (
-                  <div
-                    key={b.name}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col justify-between space-y-3"
+                  <button
+                    key={tab.id}
+                    id={`admin-tab-${tab.id}`}
+                    onClick={() => setCurrentTab(tab.id)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-2xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                    }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl">{b.icon}</span>
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-900">{b.name}</h4>
-                          <span className="text-[11px] text-slate-500">{modelCount} modelos</span>
-                        </div>
-                      </div>
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Ativa" />
-                    </div>
-
-                    <div className="pt-2 border-t border-slate-200/70 flex items-center justify-between text-xs text-slate-600">
-                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                        Catálogo Ativo
-                      </span>
-                      <button
-                        onClick={() => {
-                          const updated = brands.filter((_, i) => i !== idx);
-                          setBrands(updated);
-                        }}
-                        className="text-slate-400 hover:text-rose-600 cursor-pointer"
-                        title="Remover"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
                 );
               })}
             </div>
+
+            {isAdmin && (
+              <button
+                id="admin-add-new-btn"
+                onClick={() => setShowAddModal(true)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Adicionar</span>
+              </button>
+            )}
           </div>
-        )}
 
-        {/* TAB 2: MODELOS */}
-        {currentTab === 'modelos' && (
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <h3 className="text-sm font-bold text-slate-900">Modelos Cadastrados ({models.length})</h3>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Filtrar modelos..."
-                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-600 w-full sm:w-60"
-              />
-            </div>
-
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-              {models
-                .filter((m) => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.brand.toLowerCase().includes(searchTerm.toLowerCase()))
-                .map((m) => (
-                  <div key={m.id} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
-                        <Smartphone className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-slate-900">{m.name}</span>
-                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 rounded font-semibold">
-                            {m.brand}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-500">{m.category}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
-                        Tabela Pronta
-                      </span>
-                      <button
-                        onClick={() => setModels(models.filter((item) => item.id !== m.id))}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
+          {/* Search bar inside tab */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={`Filtrar ${currentTab}...`}
+              className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
           </div>
-        )}
 
-        {/* TAB 3: SERVIÇOS */}
-        {currentTab === 'servicos' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Catálogo de Serviços ({services.length})</h3>
-              <span className="text-xs text-slate-400">Tempo médio e preço base</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {services.map((s) => (
-                <div key={s.id} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/60 flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">{s.name}</span>
-                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 rounded font-semibold">
-                        {s.category}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500">{s.description}</p>
-                    <div className="flex items-center gap-3 text-[11px] text-slate-600 pt-1">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-slate-400" /> ~{s.estimatedMinutes} min
-                      </span>
-                      <span className="font-bold text-slate-900">
-                        Custo Base: R$ {s.basePrice}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setServices(services.filter((item) => item.id !== s.id))}
-                    className="text-slate-400 hover:text-rose-600 p-1 cursor-pointer"
+          {/* Tab Content Cards */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            {/* 1. MARCAS */}
+            {currentTab === 'marcas' && (
+              <div className="divide-y divide-slate-100">
+                {brands.map((brand) => (
+                  <div
+                    key={brand.name}
+                    className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: PEÇAS E QUALIDADES */}
-        {currentTab === 'pecas' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Qualidades e Linhas de Peças ({qualities.length})</h3>
-              <span className="text-xs text-slate-400">Multiplicadores e garantias padrão</span>
-            </div>
-
-            <div className="space-y-2.5">
-              {qualities.map((q) => (
-                <div key={q.id} className="p-4 rounded-xl border border-slate-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold text-slate-900">{q.label}</span>
-                      <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
-                        {q.badge}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{brand.icon}</span>
+                      <div>
+                        <span className="text-sm font-bold text-slate-900">{brand.name}</span>
+                        <p className="text-xs text-slate-500">Fabricante homologado no sistema</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-500">{q.description}</p>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-emerald-700 block">
-                        🛡️ {q.warrantyDefault}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        Fator de Cálculo: {q.priceMultiplier}x
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 5: REGRAS DE PREÇO */}
-        {currentTab === 'precos' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Motor de Precificação Dinâmica</h3>
-              <span className="text-xs text-slate-400">Fórmula automática de orçamento</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-xs font-bold text-slate-500 block uppercase">Margem de Lucro Alvo</span>
-                <span className="text-2xl font-black text-slate-900">55%</span>
-                <p className="text-[11px] text-slate-500">Calculada automaticamente sobre o custo da peça</p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-xs font-bold text-slate-500 block uppercase">Taxa de Parcelamento</span>
-                <span className="text-2xl font-black text-slate-900">6% a 8%</span>
-                <p className="text-[11px] text-slate-500">Distribuído em até 6x sem juros no orçamento</p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                <span className="text-xs font-bold text-slate-500 block uppercase">Desconto Máximo Atendente</span>
-                <span className="text-2xl font-black text-slate-900">R$ 40,00</span>
-                <p className="text-[11px] text-slate-500">Limite de flexibilidade para fechamento no balcão</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: FUNCIONÁRIOS */}
-        {currentTab === 'funcionarios' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Equipe Técnica e Atendentes ({staff.length})</h3>
-              <span className="text-xs text-slate-400">Responsáveis cadastrados</span>
-            </div>
-
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
-              {staff.map((st) => (
-                <div key={st.id} className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-bold text-xs flex items-center justify-center">
-                      {st.name.charAt(0)}
-                    </div>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 block">{st.name}</span>
-                      <span className="text-[11px] text-slate-500">{st.email}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                      {st.role}
-                    </span>
-                    <button
-                      onClick={() => setStaff(staff.filter((item) => item.id !== st.id))}
-                      className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 7: LOJAS */}
-        {currentTab === 'lojas' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Lojas e Filiais Cadastradas ({stores.length})</h3>
-              <span className="text-xs text-slate-400">Unidades de atendimento</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {stores.map((store) => (
-                <div key={store.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Store className="w-4 h-4 text-cyan-600" />
-                      <h4 className="text-sm font-bold text-slate-900">{store.name}</h4>
-                    </div>
-                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                       Ativa
                     </span>
                   </div>
+                ))}
+              </div>
+            )}
 
-                  <p className="text-xs text-slate-600">{store.address}</p>
-                  <p className="text-[11px] text-slate-500">📞 {store.phone}</p>
-                </div>
-              ))}
-            </div>
+            {/* 2. MODELOS */}
+            {currentTab === 'modelos' && (
+              <div className="divide-y divide-slate-100">
+                {models
+                  .filter((m) => m.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .slice(0, 10)
+                  .map((model) => (
+                    <div
+                      key={model.id}
+                      className="p-3 sm:p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 text-xs font-bold">
+                          {model.brand.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs sm:text-sm font-bold text-slate-900">{model.name}</span>
+                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {model.brand}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400">Categoria: {model.category}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500">Disponível</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* 3. SERVIÇOS */}
+            {currentTab === 'servicos' && (
+              <div className="divide-y divide-slate-100">
+                {services
+                  .filter((s) => s.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .map((srv) => (
+                    <div
+                      key={srv.id}
+                      className="p-3 sm:p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">
+                          <Wrench className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs sm:text-sm font-bold text-slate-900">{srv.name}</span>
+                          <p className="text-xs text-slate-500">{srv.description}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-bold text-slate-900">
+                          R$ {srv.basePrice.toFixed(2).replace('.', ',')}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">Base padrão</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* 4. FUNCIONÁRIOS */}
+            {currentTab === 'funcionarios' && (
+              <div className="divide-y divide-slate-100">
+                {staff.map((st) => (
+                  <div
+                    key={st.id}
+                    className="p-3 sm:p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
+                        {st.name.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">{st.name}</span>
+                        <span className="text-xs text-slate-400 block">{st.email}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      {st.role}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 5. LOJAS / FILIAIS */}
+            {currentTab === 'lojas' && (
+              <div className="divide-y divide-slate-100">
+                {storeLocations.map((store) => (
+                  <div
+                    key={store.id}
+                    className="p-3 sm:p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <Store className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">{store.name}</span>
+                        <span className="text-xs text-slate-400 block">{store.address} • {store.phone}</span>
+                      </div>
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Unidade Ativa
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Add Modal */}
+      {/* Quick Add Modal for Catalog */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-200">
-            <h3 className="text-sm font-bold text-slate-900 mb-1">
-              Adicionar Novo(a) {adminTabs.find(t => t.id === currentTab)?.label.slice(0, -1) || 'Item'}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Preencha os dados básicos para inclusão rápida
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h4 className="text-xs font-bold text-slate-900 uppercase">
+                Adicionar {currentTab.slice(0, -1)}
+              </h4>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
 
-            <form onSubmit={handleAddItem} className="space-y-3">
+            <form onSubmit={handleAddItem} className="p-4 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Nome / Descrição</label>
                 <input
@@ -470,7 +476,9 @@ export const AdminView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Informação Adicional / Marca / Preço</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Informação Adicional / Marca / Preço
+                </label>
                 <input
                   type="text"
                   value={newItemExtra}

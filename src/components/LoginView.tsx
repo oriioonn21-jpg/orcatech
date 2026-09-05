@@ -32,6 +32,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           name: email.split('@')[0],
           email,
           role: 'Técnico',
+          companyId: store.companyId || 'comp-1',
         },
         store
       );

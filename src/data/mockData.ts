@@ -114,27 +114,36 @@ export const SERVICES: ServiceItem[] = [
 export const QUALITY_OPTIONS: QualityOption[] = [
   {
     id: 'original',
+    companyId: 'comp-1',
+    name: 'Original Nacional / Retirada',
     label: 'Original Nacional / Retirada',
     description: 'Mesma tela e tecnologia de fábrica. Cores 100%, taxa de atualização e durabilidade máxima.',
     badge: 'Máxima Qualidade',
     warrantyDefault: '1 ano de garantia',
     priceMultiplier: 1.35,
+    active: true,
   },
   {
     id: 'premium_oled',
+    companyId: 'comp-1',
+    name: 'Premium OLED / Soft OLED',
     label: 'Premium OLED / Soft OLED',
     description: 'Excelente fidelidade de cores, baixo consumo de bateria e resposta ao toque idêntica.',
     badge: 'Mais Recomendada',
     warrantyDefault: '6 meses de garantia',
     priceMultiplier: 1.0,
+    active: true,
   },
   {
     id: 'incell_primeira_linha',
+    companyId: 'comp-1',
+    name: 'Primeira Linha / Incell',
     label: 'Primeira Linha / Incell',
     description: 'Opção econômica com ótimo funcionamento touch e visual de alto padrão.',
     badge: 'Econômica',
     warrantyDefault: '90 dias de garantia',
     priceMultiplier: 0.72,
+    active: true,
   },
 ];
 
@@ -298,14 +307,22 @@ export const INITIAL_QUOTES: Quote[] = [
   },
 ];
 
+export const COMPANIES: { id: string; name: string; cnpj: string; phone: string }[] = [
+  { id: 'comp-1', name: 'TechFix Assistência Matriz', cnpj: '12.345.678/0001-90', phone: '(11) 3456-7890' },
+  { id: 'comp-2', name: 'iCell Prime Especializada', cnpj: '98.765.432/0001-11', phone: '(11) 4004-9988' },
+];
+
 export const STAFF_MEMBERS: StaffMember[] = [
-  { id: 'st-1', name: 'Pedro Santos', email: 'pedro@orcatech.com', role: 'Técnico' },
-  { id: 'st-2', name: 'Renato Silva', email: 'renato@orcatech.com', role: 'Técnico' },
-  { id: 'st-3', name: 'Aline Oliveira', email: 'aline@orcatech.com', role: 'Atendente' },
-  { id: 'st-4', name: 'Carlos Eduardo', email: 'carlos@orcatech.com', role: 'Gerente' },
+  { id: 'st-1', name: 'Pedro Santos', email: 'pedro@orcatech.com', role: 'Técnico', companyId: 'comp-1', storeId: 'store-1' },
+  { id: 'st-2', name: 'Renato Silva', email: 'renato@orcatech.com', role: 'Técnico', companyId: 'comp-1', storeId: 'store-2' },
+  { id: 'st-3', name: 'Aline Oliveira', email: 'aline@orcatech.com', role: 'Atendente', companyId: 'comp-1', storeId: 'store-1' },
+  { id: 'st-4', name: 'Carlos Eduardo', email: 'carlos@orcatech.com', role: 'Administrador', companyId: 'comp-1', storeId: 'store-1' },
+  { id: 'st-5', name: 'Felipe Costa', email: 'felipe@icellprime.com', role: 'Administrador', companyId: 'comp-2', storeId: 'store-icell-1' },
+  { id: 'st-6', name: 'Juliana Mendes', email: 'juliana@icellprime.com', role: 'Técnico', companyId: 'comp-2', storeId: 'store-icell-1' },
 ];
 
 export const STORES: StoreLocation[] = [
-  { id: 'store-1', name: 'Loja Centro - Matriz', address: 'Rua das Flores, 420 - Centro', phone: '(11) 3456-7890', active: true },
-  { id: 'store-2', name: 'Loja Shopping Plaza', address: 'Av. Paulista, 1500 - Piso 2', phone: '(11) 3999-1122', active: true },
+  { id: 'store-1', companyId: 'comp-1', name: 'Loja Centro - Matriz', address: 'Rua das Flores, 420 - Centro', phone: '(11) 3456-7890', active: true },
+  { id: 'store-2', companyId: 'comp-1', name: 'Loja Shopping Plaza', address: 'Av. Paulista, 1500 - Piso 2', phone: '(11) 3999-1122', active: true },
+  { id: 'store-icell-1', companyId: 'comp-2', name: 'Unidade Jardins', address: 'Rua Oscar Freire, 1020', phone: '(11) 4004-9988', active: true },
 ];

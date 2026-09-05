@@ -44,15 +44,16 @@ Aqui está o orçamento detalhado para o seu aparelho:
 📱 *Aparelho:* ${quote.deviceName}
 🛠️ *Serviço:* ${quote.serviceName}
 💎 *Qualidade:* ${quote.qualityLabel}
-⏱️ *Prazo de Execução:* ${quote.deliveryTime}
 🛡️ *Garantia:* ${quote.warranty}
+🚚 *Modalidade:* ${quote.serviceTypeName || 'Atendimento na Loja'}
+⏱️ *Prazo de Execução:* ${quote.deliveryTime}
 
 💰 *VALOR:*
 • *R$ ${quote.cashPrice.toFixed(2).replace('.', ',')}* à vista (Pix ou Dinheiro)
 • Ou até ${quote.installmentsCount}x de *R$ ${(quote.installmentsPrice / quote.installmentsCount).toFixed(2).replace('.', ',')}* no cartão
 
-📍 *Atendimento:* ${quote.storeName}
-👨‍🔧 *Técnico:* ${quote.technicianName}
+📍 *Unidade:* ${quote.storeName}
+👨‍🔧 *Técnico Responsável:* ${quote.technicianName}
 🔖 *Orçamento Nº:* ${quote.quoteNumber}
 
 ✅ _Peça disponível para reparo imediato!_
@@ -134,8 +135,9 @@ Deseja aprovar e reservar o seu horário hoje?`;
                 <div>📱 <strong>Aparelho:</strong> {quote.deviceName}</div>
                 <div>🛠️ <strong>Serviço:</strong> {quote.serviceName}</div>
                 <div>💎 <strong>Qualidade:</strong> {quote.qualityLabel}</div>
-                <div>⏱️ <strong>Prazo:</strong> {quote.deliveryTime}</div>
                 <div>🛡️ <strong>Garantia:</strong> {quote.warranty}</div>
+                <div>🚚 <strong>Atendimento:</strong> {quote.serviceTypeName || 'Atendimento na Loja'}</div>
+                <div>⏱️ <strong>Prazo:</strong> {quote.deliveryTime}</div>
               </div>
 
               <div className="bg-emerald-50/80 p-2 rounded-lg border border-emerald-200/70 text-slate-900">

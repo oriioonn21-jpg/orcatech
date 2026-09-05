@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     {
       id: 'admin' as NavTab,
-      label: 'Administração',
+      label: 'Configurações',
       icon: Settings,
     },
   ];

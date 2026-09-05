@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Navbar, NavTab } from './components/Navbar';
@@ -8,8 +8,9 @@ import { NewQuoteView } from './components/NewQuoteView';
 import { HistoryView } from './components/HistoryView';
 import { AdminView } from './components/AdminView';
 import { QuotePreviewModal } from './components/QuotePreviewModal';
-import { StaffMember, StoreLocation, Quote, BrandName } from './types';
-import { STAFF_MEMBERS, STORES, INITIAL_QUOTES } from './data/mockData';
+import { StaffMember, StoreLocation, Quote, BrandName, CompanyQuoteSettings } from './types';
+import { STAFF_MEMBERS, STORES, INITIAL_QUOTES, COMPANIES } from './data/mockData';
+import { getCompanySettings, saveCompanySettings } from './data/settingsStorage';
 
 export default function App() {
   // Session state: starts with default technician for instant preview, can toggle to login screen
@@ -17,10 +18,47 @@ export default function App() {
   const [currentStore, setCurrentStore] = useState<StoreLocation>(STORES[0]);
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
 
+  // Multi-tenancy: active company state
+  const [currentCompanyId, setCurrentCompanyId] = useState<string>(() => {
+    return STAFF_MEMBERS[0]?.companyId || COMPANIES[0].id;
+  });
+
+  const currentCompany = useMemo(() => {
+    return COMPANIES.find((c) => c.id === currentCompanyId) || COMPANIES[0];
+  }, [currentCompanyId]);
+
+  // Company isolated quote settings (warranties, qualities, serviceTypes, technicians)
+  const [companySettings, setCompanySettings] = useState<CompanyQuoteSettings>(() => {
+    return getCompanySettings(STAFF_MEMBERS[0]?.companyId || COMPANIES[0].id);
+  });
+
   // Quotes state
   const [quotes, setQuotes] = useState<Quote[]>(INITIAL_QUOTES);
   const [selectedQuoteForPreview, setSelectedQuoteForPreview] = useState<Quote | null>(null);
   const [preSelectedBrand, setPreSelectedBrand] = useState<BrandName | undefined>(undefined);
+
+  // Update company settings handler (isolated per company in localStorage)
+  const handleUpdateCompanySettings = (newSettings: CompanyQuoteSettings) => {
+    saveCompanySettings(newSettings);
+    setCompanySettings(newSettings);
+  };
+
+  // Switch company handler (e.g. for testing multi-tenant isolation)
+  const handleSwitchCompany = (newCompanyId: string) => {
+    setCurrentCompanyId(newCompanyId);
+    const newSettings = getCompanySettings(newCompanyId);
+    setCompanySettings(newSettings);
+
+    // Switch to a staff member of the new company if available
+    const matchingStaff = STAFF_MEMBERS.find((s) => s.companyId === newCompanyId);
+    if (matchingStaff) {
+      setCurrentUser(matchingStaff);
+    }
+    const matchingStore = STORES.find((st) => st.companyId === newCompanyId);
+    if (matchingStore) {
+      setCurrentStore(matchingStore);
+    }
+  };
 
   // If user is logged out, show LoginView
   if (!currentUser) {
@@ -29,6 +67,9 @@ export default function App() {
         onLogin={(user, store) => {
           setCurrentUser(user);
           setCurrentStore(store);
+          const compId = user.companyId || store.companyId || COMPANIES[0].id;
+          setCurrentCompanyId(compId);
+          setCompanySettings(getCompanySettings(compId));
           setActiveTab('dashboard');
         }}
       />
@@ -43,8 +84,12 @@ export default function App() {
 
   // Handle quote generation
   const handleQuoteGenerated = (newQuote: Quote) => {
-    setQuotes((prev) => [newQuote, ...prev]);
-    setSelectedQuoteForPreview(newQuote);
+    const stampedQuote: Quote = {
+      ...newQuote,
+      companyId: currentCompany.id,
+    };
+    setQuotes((prev) => [stampedQuote, ...prev]);
+    setSelectedQuoteForPreview(stampedQuote);
   };
 
   // Handle status changes (Enviado, Aprovado, Recusado)
@@ -57,7 +102,11 @@ export default function App() {
     }
   };
 
-  const pendingCount = quotes.filter((q) => q.status === 'Pendente').length;
+  // Filter quotes by company to guarantee that company data is isolated
+  const companyQuotes = quotes.filter(
+    (q) => !q.companyId || q.companyId === currentCompany.id
+  );
+  const pendingCount = companyQuotes.filter((q) => q.status === 'Pendente').length;
 
   return (
     <div className="flex h-screen w-full bg-[#F8FAFC] font-sans text-[#1E293B] overflow-hidden">
@@ -93,7 +142,7 @@ export default function App() {
               <DashboardView
                 currentUser={currentUser}
                 currentStore={currentStore}
-                quotes={quotes}
+                quotes={companyQuotes}
                 onStartNewQuote={handleStartNewQuote}
                 onViewQuote={(quote) => setSelectedQuoteForPreview(quote)}
                 onNavigateHistory={() => setActiveTab('history')}
@@ -104,6 +153,7 @@ export default function App() {
               <NewQuoteView
                 currentUser={currentUser}
                 currentStore={currentStore}
+                companySettings={companySettings}
                 initialBrand={preSelectedBrand}
                 onQuoteGenerated={handleQuoteGenerated}
                 onCancel={() => setActiveTab('dashboard')}
@@ -112,14 +162,25 @@ export default function App() {
 
             {activeTab === 'history' && (
               <HistoryView
-                quotes={quotes}
+                quotes={companyQuotes}
                 onViewQuote={(quote) => setSelectedQuoteForPreview(quote)}
                 onStatusChange={handleStatusChange}
                 onStartNewQuote={() => handleStartNewQuote()}
               />
             )}
 
-            {activeTab === 'admin' && <AdminView />}
+            {activeTab === 'admin' && (
+              <AdminView
+                currentUser={currentUser}
+                currentStore={currentStore}
+                currentCompany={currentCompany}
+                companySettings={companySettings}
+                stores={STORES}
+                onUpdateCompanySettings={handleUpdateCompanySettings}
+                onSwitchCompany={handleSwitchCompany}
+                companies={COMPANIES}
+              />
+            )}
           </div>
         </main>
       </div>
